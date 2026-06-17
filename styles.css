@@ -43,6 +43,32 @@ header p {
   font-size: 0.95rem;
 }
 
+.dark-mode-toggle {
+  position: fixed;
+  top: 1rem;
+  right: 1rem;
+  z-index: 1000;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  background: rgba(255, 255, 255, 0.08);
+  font-size: 1.2rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.3s ease;
+  padding: 0;
+  line-height: 1;
+}
+
+.dark-mode-toggle:hover {
+  background: rgba(255, 255, 255, 0.2);
+  border-color: rgba(255, 255, 255, 0.5);
+  transform: scale(1.1);
+}
+
 .card {
   border: none;
   border-radius: 12px;
@@ -69,10 +95,8 @@ header p {
   padding: 0.5rem 0;
 }
 
+.btn-editar,
 .btn-eliminar {
-  background: linear-gradient(135deg, #ff416c, #ff4b2b);
-  color: white;
-  border: none;
   padding: 4px 14px;
   border-radius: 8px;
   cursor: pointer;
@@ -80,6 +104,23 @@ header p {
   transition:
     transform 0.15s,
     box-shadow 0.15s;
+}
+
+.btn-editar {
+  background: transparent;
+  color: #667eea;
+  border: 1px solid #667eea;
+}
+
+.btn-editar:hover {
+  transform: scale(1.05);
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+}
+
+.btn-eliminar {
+  background: linear-gradient(135deg, #ff416c, #ff4b2b);
+  color: white;
+  border: none;
 }
 
 .btn-eliminar:hover {
@@ -129,4 +170,94 @@ footer {
 #addMovimientoBtn,
 #btnExportCSV {
   min-height: 44px;
+}
+
+body.dark-mode {
+  background: #1a1a2e;
+}
+body.dark-mode .card {
+  background: #16213e;
+  color: #e0e0e0;
+}
+body.dark-mode .card-header {
+  background: linear-gradient(135deg, #0f3460, #533483);
+}
+body.dark-mode .table {
+  color: #e0e0e0;
+  --bs-table-bg: transparent;
+  --bs-table-hover-bg: rgba(255, 255, 255, 0.05);
+  --bs-table-striped-bg: rgba(255, 255, 255, 0.03);
+}
+body.dark-mode .table thead {
+  color: #c0c0c0;
+}
+body.dark-mode .table td {
+  color: #e0e0e0;
+  background-color: transparent;
+}
+body.dark-mode .table tbody tr:hover td {
+  background-color: rgba(255, 255, 255, 0.05);
+}
+body.dark-mode .btn-editar {
+  background: transparent;
+  color: #8b9aff;
+  border: 1px solid #8b9aff;
+  padding: 4px 14px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 600;
+  transition:
+    transform 0.15s,
+    box-shadow 0.15s;
+}
+body.dark-mode .btn-editar:hover {
+  transform: scale(1.05);
+  box-shadow: 0 4px 12px rgba(139, 154, 255, 0.3);
+}
+body.dark-mode .btn-eliminar:hover {
+  box-shadow: 0 4px 12px rgba(255, 65, 108, 0.3);
+}
+body.dark-mode .form-control,
+body.dark-mode .form-select {
+  background-color: #1a1a2e;
+  color: #e0e0e0;
+  border-color: #2a2a4a;
+}
+body.dark-mode .form-control:focus,
+body.dark-mode .form-select:focus {
+  background-color: #1a1a2e;
+  color: #e0e0e0;
+  border-color: #667eea;
+  box-shadow: 0 0 0 0.2rem rgba(102, 126, 234, 0.25);
+}
+body.dark-mode .form-control::placeholder {
+  color: #666;
+}
+body.dark-mode .form-label {
+  color: #c0c0c0;
+}
+body.dark-mode #totalBalance {
+  color: #8b9aff;
+}
+body.dark-mode .alert-success {
+  background-color: #1a3a2a;
+  color: #8bcba0;
+  border-color: #2a5a3a;
+}
+body.dark-mode footer {
+  color: rgba(255, 255, 255, 0.4);
+}
+body.dark-mode .dark-mode-toggle {
+  border-color: rgba(255, 255, 255, 0.15);
+  background: rgba(255, 255, 255, 0.04);
+}
+body.dark-mode .dark-mode-toggle:hover {
+  background: rgba(255, 255, 255, 0.12);
+  border-color: rgba(255, 255, 255, 0.35);
+}
+
+#chartGastos {
+  max-width: 400px;
+  display: block;
+  margin: 0 auto;
 }

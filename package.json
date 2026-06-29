@@ -1,0 +1,14 @@
+{
+  "name": "financeapp-frontend",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "devDependencies": {
+    "vitest": "^3.1.0",
+    "jsdom": "^26.0.0"
+  }
+}

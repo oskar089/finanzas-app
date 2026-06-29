@@ -9,6 +9,35 @@ import { ApiError } from "../middleware/errorHandler.js";
 const router = Router();
 
 /**
+ * Verify the user is the admin of the family group.
+ * Returns the family if authorized, throws 404 or 403 otherwise.
+ */
+async function requireAdmin(familyId, userId) {
+  const family = await prisma.familyGroup.findUnique({
+    where: { id: familyId },
+  });
+
+  if (!family) {
+    throw new ApiError(404, "Family group not found");
+  }
+
+  if (family.adminId !== userId) {
+    throw new ApiError(403, "You do not have admin access to this family group");
+  }
+
+  return family;
+}
+
+/**
+ * Count how many admins a family group has.
+ */
+async function countAdmins(familyId) {
+  return prisma.familyMember.count({
+    where: { familyId, role: "ADMIN" },
+  });
+}
+
+/**
  * GET /api/family
  * Get current user's family groups
  */
@@ -134,13 +163,7 @@ router.post("/:id/invite", async (req, res, next) => {
     const { id } = req.params;
 
     // Check if family exists and user is admin
-    const family = await prisma.familyGroup.findFirst({
-      where: { id, adminId: req.user.id },
-    });
-
-    if (!family) {
-      throw new ApiError(404, "Family not found or you are not the admin");
-    }
+    const family = await requireAdmin(id, req.user.id);
 
     const validatedData = inviteMemberSchema.parse(req.body);
 
@@ -204,17 +227,17 @@ router.delete("/:id/members/:memberId", async (req, res, next) => {
     const { id, memberId } = req.params;
 
     // Check if family exists and user is admin
-    const family = await prisma.familyGroup.findFirst({
-      where: { id, adminId: req.user.id },
-    });
+    const family = await requireAdmin(id, req.user.id);
 
-    if (!family) {
-      throw new ApiError(404, "Family not found or you are not the admin");
-    }
-
-    // Can't remove yourself
+    // Prevent removing the last admin
     if (memberId === req.user.id) {
-      throw new ApiError(400, "Admin cannot remove themselves");
+      const adminCount = await countAdmins(id);
+      if (adminCount <= 1) {
+        throw new ApiError(
+          400,
+          "Cannot remove the last admin. Promote another member to admin first.",
+        );
+      }
     }
 
     // Check if member exists
@@ -251,13 +274,7 @@ router.put("/:id/members/:memberId/role", async (req, res, next) => {
     }
 
     // Check if family exists and user is admin
-    const family = await prisma.familyGroup.findFirst({
-      where: { id, adminId: req.user.id },
-    });
-
-    if (!family) {
-      throw new ApiError(404, "Family not found or you are not the admin");
-    }
+    const family = await requireAdmin(id, req.user.id);
 
     // Check if member exists
     const member = await prisma.familyMember.findFirst({
@@ -302,13 +319,7 @@ router.delete("/:id", async (req, res, next) => {
     const { id } = req.params;
 
     // Check if family exists and user is admin
-    const family = await prisma.familyGroup.findFirst({
-      where: { id, adminId: req.user.id },
-    });
-
-    if (!family) {
-      throw new ApiError(404, "Family not found or you are not the admin");
-    }
+    const family = await requireAdmin(id, req.user.id);
 
     // Delete family (cascade will delete members)
     await prisma.familyGroup.delete({

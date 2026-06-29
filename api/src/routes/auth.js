@@ -2,7 +2,11 @@ import { Router } from "express";
 import bcrypt from "bcryptjs";
 import prisma from "../lib/prisma.js";
 import { generateToken } from "../middleware/auth.js";
-import { registerSchema, loginSchema } from "../validations/schemas.js";
+import {
+  registerSchema,
+  loginSchema,
+  updateProfileSchema,
+} from "../validations/schemas.js";
 import { ApiError } from "../middleware/errorHandler.js";
 
 const router = Router();
@@ -133,15 +137,21 @@ router.get("/me", async (req, res, next) => {
  */
 router.put("/profile", async (req, res, next) => {
   try {
-    const { name, avatarUrl, defaultCurrency } = req.body;
+    const validatedData = updateProfileSchema.parse(req.body);
+
+    // If email is changing, check uniqueness
+    if (validatedData.email && validatedData.email !== req.user.email) {
+      const existing = await prisma.user.findUnique({
+        where: { email: validatedData.email },
+      });
+      if (existing) {
+        throw new ApiError(409, "Email already in use");
+      }
+    }
 
     const user = await prisma.user.update({
       where: { id: req.user.id },
-      data: {
-        ...(name && { name }),
-        ...(avatarUrl && { avatarUrl }),
-        ...(defaultCurrency && { defaultCurrency }),
-      },
+      data: validatedData,
       select: {
         id: true,
         email: true,

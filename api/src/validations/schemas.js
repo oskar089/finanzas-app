@@ -20,6 +20,13 @@ export const loginSchema = z.object({
   password: z.string().min(1, "Password is required"),
 });
 
+export const updateProfileSchema = z.object({
+  name: z.string().min(2).optional(),
+  email: z.string().email().optional(),
+  avatarUrl: z.string().url().optional().or(z.literal("")),
+  defaultCurrency: z.string().length(3).optional(),
+});
+
 // ============================================================
 // ACCOUNT SCHEMAS
 // ============================================================

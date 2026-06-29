@@ -1,3 +1,13 @@
+// ============================================================
+// [DEPRECATED] Este archivo (app.js) es la implementación LEGACY
+// que usaba localStorage para persistencia local del lado del
+// cliente. Fue reemplazado por js/app.js (ES module) que se
+// comunica con la API REST del backend.
+//
+// Este archivo se conserva como referencia pero ya NO se carga
+// desde index.html. Los nuevos cambios deben hacerse en js/app.js.
+// ============================================================
+
 const form = document.getElementById("addMovementForm");
 const conceptoInput = document.getElementById("concepto");
 const montoInput = document.getElementById("monto");
@@ -6,6 +16,48 @@ const categoriaSelect = document.getElementById("categoria");
 const fechaInput = document.getElementById("fecha");
 const movimientosBody = document.getElementById("movimientosTableBody");
 const balanceSpan = document.getElementById("totalBalance");
+const btnCancelEdit = document.getElementById("btnCancelEdit");
+const formTitle = document.getElementById("formTitle");
+
+// Categorías separadas por tipo. AGENTS.md: "Input validation before processing"
+// — antes había una sola lista fija sin distinguir ingreso/gasto, lo que permitía
+// categorizar un ingreso como "Alimentación".
+const CATEGORIAS_GASTO = {
+  alimentacion: "Alimentación",
+  transporte: "Transporte",
+  entretenimiento: "Entretenimiento",
+  salud: "Salud",
+  "otros-gasto": "Otros",
+};
+
+const CATEGORIAS_INGRESO = {
+  sueldo: "Sueldo",
+  freelance: "Freelance",
+  inversiones: "Inversiones",
+  "otros-ingreso": "Otros",
+};
+
+function getCategoriasPorTipo(tipo) {
+  return tipo === "ingreso" ? CATEGORIAS_INGRESO : CATEGORIAS_GASTO;
+}
+
+function getCategoriasValidas() {
+  return [...Object.keys(CATEGORIAS_GASTO), ...Object.keys(CATEGORIAS_INGRESO)];
+}
+
+// Repuebla el <select> de categoría según el tipo (gasto/ingreso) seleccionado.
+function poblarCategorias(tipo, valorPreseleccionado = null) {
+  const categorias = getCategoriasPorTipo(tipo);
+  categoriaSelect.innerHTML = Object.entries(categorias)
+    .map(([valor, etiqueta]) => `<option value="${valor}">${etiqueta}</option>`)
+    .join("");
+  if (valorPreseleccionado && categorias[valorPreseleccionado]) {
+    categoriaSelect.value = valorPreseleccionado;
+  }
+}
+
+tipoSelect.addEventListener("change", (e) => poblarCategorias(e.target.value));
+poblarCategorias(tipoSelect.value);
 
 let movimientos = JSON.parse(localStorage.getItem("movimientos")) || [];
 let sortColumn = "fecha";
@@ -14,6 +66,7 @@ let filterTipo = "todos";
 let filterCategoria = "todas";
 let filterFechaDesde = "";
 let filterFechaHasta = "";
+let filterMontoMin = "";
 let filterMontoMax = "";
 let filterConcepto = "";
 let successAlertTimer = null;
@@ -21,36 +74,110 @@ let editandoId = null;
 renderMovimientos();
 actualizarBalance();
 
+// AGENTS.md: "Input validation before processing"
+// Escapa caracteres que rompen innerHTML cuando el dato viene de un CSV importado
+// o de cualquier input del usuario.
+function escapeHTML(str) {
+  return String(str ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+// ============================================================
+// TOAST Y CONFIRM — reemplazan alert()/confirm() nativos
+// ============================================================
+
+function showToast(mensaje, tipo = "success") {
+  const container = document.getElementById("toastContainer");
+  const toast = document.createElement("div");
+  toast.className = `app-toast app-toast-${tipo}`;
+  toast.textContent = mensaje;
+  container.appendChild(toast);
+
+  requestAnimationFrame(() => toast.classList.add("show"));
+  setTimeout(() => {
+    toast.classList.remove("show");
+    toast.addEventListener("transitionend", () => toast.remove(), {
+      once: true,
+    });
+  }, 3500);
+}
+
+function showConfirm(mensaje) {
+  return new Promise((resolve) => {
+    const overlay = document.getElementById("confirmOverlay");
+    const messageEl = document.getElementById("confirmMessage");
+    const acceptBtn = document.getElementById("confirmAcceptBtn");
+    const cancelBtn = document.getElementById("confirmCancelBtn");
+
+    messageEl.textContent = mensaje;
+    overlay.classList.remove("d-none");
+
+    const cleanup = (resultado) => {
+      overlay.classList.add("d-none");
+      acceptBtn.removeEventListener("click", onAccept);
+      cancelBtn.removeEventListener("click", onCancel);
+      overlay.removeEventListener("click", onOverlayClick);
+      resolve(resultado);
+    };
+
+    const onAccept = () => cleanup(true);
+    const onCancel = () => cleanup(false);
+    const onOverlayClick = (e) => {
+      if (e.target === overlay) cleanup(false);
+    };
+
+    acceptBtn.addEventListener("click", onAccept);
+    cancelBtn.addEventListener("click", onCancel);
+    overlay.addEventListener("click", onOverlayClick);
+  });
+}
+
+// ============================================================
+// PERSISTENCIA — con manejo de errores
+// ============================================================
+
+// AGENTS.md: "Input validation before processing"
+// Antes localStorage.setItem se llamaba sin try/catch en 4 sitios distintos.
+// Si la cuota está llena o el navegador está en modo incógnito restrictivo,
+// la operación lanza una excepción y la app fallaba silenciosamente.
+function guardarMovimientos() {
+  try {
+    localStorage.setItem("movimientos", JSON.stringify(movimientos));
+    return true;
+  } catch (err) {
+    showToast(
+      "No se pudo guardar: almacenamiento lleno o bloqueado.",
+      "danger",
+    );
+    console.error("Error guardando en localStorage:", err);
+    return false;
+  }
+}
+
 //Funcion que devuelve los movimientos filtrados segun los filtros aplicados
 function getMovimientosFiltrados() {
   return movimientos.filter((m) => {
-    // Filtro por tipo
     if (filterTipo !== "todos" && m.tipo !== filterTipo) return false;
-
-    // Filtro por categoría
     if (filterCategoria !== "todas" && m.categoria !== filterCategoria)
       return false;
-
-    // Filtro por fecha desde
     if (filterFechaDesde && m.fecha < filterFechaDesde) return false;
-
-    // Filtro por fecha hasta
     if (filterFechaHasta && m.fecha > filterFechaHasta) return false;
-
-    // Filtro por monto máximo
+    if (filterMontoMin && m.monto < Number(filterMontoMin)) return false;
     if (filterMontoMax && m.monto > Number(filterMontoMax)) return false;
-
-    // Filtro por concepto
     if (
       filterConcepto &&
       !m.concepto.toLowerCase().includes(filterConcepto.toLowerCase().trim())
     )
       return false;
-
     return true;
   });
 }
 
+// AGENTS.md: "Immutable patterns (spread, map, filter)"
 function ordenarMovimientos(columna) {
   if (sortColumn === columna) {
     sortDirection = sortDirection === "asc" ? "desc" : "asc";
@@ -58,33 +185,35 @@ function ordenarMovimientos(columna) {
     sortColumn = columna;
     sortDirection = "asc";
   }
-  movimientos.sort((a, b) => {
-    let valorA = a[columna];
-    let valorB = b[columna];
+
+  movimientos = [...movimientos].sort((a, b) => {
+    const valorA = a[columna];
+    const valorB = b[columna];
 
     if (columna === "monto") {
       return sortDirection === "asc" ? valorA - valorB : valorB - valorA;
     }
-
     if (typeof valorA === "string") {
       return sortDirection === "asc" ?
           valorA.localeCompare(valorB)
         : valorB.localeCompare(valorA);
     }
-
     return sortDirection === "asc" ? valorA - valorB : valorB - valorA;
   });
 }
 
-function renderMovimientos() {
-  movimientosBody.innerHTML = "";
+// Devuelve la etiqueta legible de una categoría (ej: "otros-gasto" → "Otros")
+function getEtiquetaCategoria(categoria) {
+  return (
+    CATEGORIAS_GASTO[categoria] || CATEGORIAS_INGRESO[categoria] || categoria
+  );
+}
 
-  // Limpiar clase de todos los th
+function renderMovimientos() {
   document
     .querySelectorAll("th")
     .forEach((th) => th.classList.remove("sorted-asc", "sorted-desc"));
 
-  // Poner clase al th activo
   const thActual = document.querySelector(`th[data-column="${sortColumn}"]`);
   if (thActual) {
     thActual.classList.add(
@@ -93,54 +222,46 @@ function renderMovimientos() {
   }
 
   const filtrados = getMovimientosFiltrados();
-  for (let i = 0; i < filtrados.length; i++) {
-    const movimiento = filtrados[i];
-    const fila = document.createElement("tr");
 
-    fila.innerHTML = `
-      <td>${movimiento.fecha}</td>
-      <td>${movimiento.concepto}</td>
-      <td>${movimiento.tipo}</td>
-      <td>${movimiento.categoria}</td>
-      <td>€${movimiento.monto}</td>
-      <td>
-        <button class="btn-editar" data-id="${movimiento.id}">Editar</button>
-        <button class="btn-eliminar" data-id="${movimiento.id}">Eliminar</button>
-      </td>
-    `;
-
-    movimientosBody.appendChild(fila);
-  }
+  movimientosBody.innerHTML = filtrados
+    .map(
+      (movimiento) => `
+      <tr>
+        <td>${escapeHTML(movimiento.fecha)}</td>
+        <td>${escapeHTML(movimiento.concepto)}</td>
+        <td>${escapeHTML(movimiento.tipo)}</td>
+        <td>${escapeHTML(getEtiquetaCategoria(movimiento.categoria))}</td>
+        <td>€${escapeHTML(movimiento.monto)}</td>
+        <td>
+          <button class="btn-editar" data-id="${escapeHTML(movimiento.id)}">Editar</button>
+          <button class="btn-eliminar" data-id="${escapeHTML(movimiento.id)}">Eliminar</button>
+        </td>
+      </tr>`,
+    )
+    .join("");
 }
 
 function actualizarBalance() {
-  let total = 0;
-
-  for (let i = 0; i < movimientos.length; i++) {
-    if (movimientos[i].tipo === "ingreso") {
-      total += movimientos[i].monto;
-    } else {
-      total -= movimientos[i].monto;
-    }
-  }
+  const total = movimientos.reduce(
+    (acc, m) => (m.tipo === "ingreso" ? acc + m.monto : acc - m.monto),
+    0,
+  );
   balanceSpan.textContent = `Balance: €${total.toFixed(2)}`;
 }
 
 function exportCSV() {
   if (movimientos.length === 0) {
-    alert("No hay movimientos para exportar.");
+    showToast("No hay movimientos para exportar.", "warning");
     return;
   }
 
-  const lineas = ["Fecha;Tipo;Categoría;Concepto;Monto"];
-
-  for (let i = 0; i < movimientos.length; i++) {
-    const m = movimientos[i];
-    const signo = m.tipo === "ingreso" ? "" : "-";
-    lineas.push(
-      `${m.fecha};${m.tipo};${m.categoria};${m.concepto};${signo}${m.monto}`,
-    );
-  }
+  const lineas = [
+    "Fecha;Tipo;Categoría;Concepto;Monto",
+    ...movimientos.map((m) => {
+      const signo = m.tipo === "ingreso" ? "" : "-";
+      return `${m.fecha};${m.tipo};${m.categoria};${m.concepto};${signo}${m.monto}`;
+    }),
+  ];
 
   const csv = "\uFEFF" + lineas.join("\n");
   const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
@@ -153,9 +274,26 @@ function exportCSV() {
   a.click();
   document.body.removeChild(a);
   URL.revokeObjectURL(url);
+
+  showToast("CSV exportado correctamente.", "success");
 }
 
 document.getElementById("btnExportCSV").addEventListener("click", exportCSV);
+
+// Restaura el formulario a su estado "Nuevo movimiento", limpiando cualquier edición pendiente.
+function cancelarEdicion() {
+  editandoId = null;
+  form.reset();
+  fechaInput.value = "";
+  tipoSelect.value = "gasto";
+  poblarCategorias("gasto");
+  formTitle.textContent = "Nuevo Movimiento";
+  document.getElementById("addMovimientoBtn").textContent =
+    "+ Agregar Movimiento";
+  btnCancelEdit.classList.add("d-none");
+}
+
+btnCancelEdit.addEventListener("click", cancelarEdicion);
 
 form.addEventListener("submit", (e) => {
   e.preventDefault();
@@ -164,95 +302,105 @@ form.addEventListener("submit", (e) => {
   const montoTexto = montoInput.value.trim();
   const monto = Number(montoTexto.replace(",", "."));
   const fecha = fechaInput.value;
+  const tipo = tipoSelect.value;
+  const categoria = categoriaSelect.value;
 
-  // Validación
   if (!concepto) {
-    alert("El concepto no puede estar vacío.");
+    showToast("El concepto no puede estar vacío.", "warning");
     return;
   }
   if (!montoTexto || isNaN(monto) || monto <= 0) {
-    alert("Ingresá un monto válido mayor a 0.");
+    showToast("Ingresá un monto válido mayor a 0.", "warning");
     return;
   }
   if (!fecha) {
-    alert("Seleccioná una fecha.");
+    showToast("Seleccioná una fecha.", "warning");
+    return;
+  }
+  // Valida la categoría contra el set correcto según el tipo elegido,
+  // no contra una lista global. Evita que un ingreso quede con categoría de gasto.
+  const categoriasDelTipo = Object.keys(getCategoriasPorTipo(tipo));
+  if (!categoriasDelTipo.includes(categoria)) {
+    showToast(
+      "Seleccioná una categoría válida para este tipo de movimiento.",
+      "warning",
+    );
     return;
   }
 
-  let nuevoMovimiento;
-
   if (editandoId) {
-    // === MODO EDICIÓN ===
-    nuevoMovimiento = movimientos.find((m) => m.id === editandoId);
-    nuevoMovimiento.concepto = concepto;
-    nuevoMovimiento.monto = monto;
-    nuevoMovimiento.tipo = tipoSelect.value;
-    nuevoMovimiento.categoria = categoriaSelect.value;
-    nuevoMovimiento.fecha = fecha;
-    editandoId = null;
+    movimientos = movimientos.map((m) =>
+      m.id === editandoId ?
+        { ...m, concepto, monto, tipo, categoria, fecha }
+      : m,
+    );
   } else {
-    // === MODO NUEVO ===
-    nuevoMovimiento = {
-      id: Date.now(),
+    const nuevoMovimiento = {
+      id: crypto.randomUUID(),
       concepto,
       monto,
-      tipo: tipoSelect.value,
-      categoria: categoriaSelect.value,
+      tipo,
+      categoria,
       fecha,
     };
-    movimientos.push(nuevoMovimiento);
+    movimientos = [...movimientos, nuevoMovimiento];
   }
 
-  localStorage.setItem("movimientos", JSON.stringify(movimientos));
-  form.reset();
-  document.getElementById("addMovimientoBtn").textContent = "+ Agregar Movimiento";
+  if (!guardarMovimientos()) return;
+
+  const fueEdicion = Boolean(editandoId);
+  cancelarEdicion();
   renderMovimientos();
   actualizarBalance();
   actualizarChartGastos();
   actualizarChartEvolucion();
-
-  // Alerta de éxito
-  if (successAlertTimer) clearTimeout(successAlertTimer);
-  const formCardBody = form.parentElement;
-  const oldAlert = formCardBody.querySelector(".alert-success");
-  if (oldAlert) oldAlert.remove();
-
-  const alertDiv = document.createElement("div");
-  alertDiv.className = "alert alert-success";
-  alertDiv.textContent = "Movimiento agregado ✓";
-  formCardBody.insertBefore(alertDiv, formCardBody.firstChild);
-  successAlertTimer = setTimeout(() => {
-    alertDiv.remove();
-    successAlertTimer = null;
-  }, 3000);
+  showToast(
+    fueEdicion ? "Movimiento actualizado ✓" : "Movimiento agregado ✓",
+    "success",
+  );
 });
 
-movimientosBody.addEventListener("click", (e) => {
+movimientosBody.addEventListener("click", async (e) => {
   if (e.target.classList.contains("btn-editar")) {
-    const id = Number(e.target.dataset.id);
+    const id = e.target.dataset.id;
     const movimiento = movimientos.find((m) => m.id === id);
     if (!movimiento) return;
+
     conceptoInput.value = movimiento.concepto;
     montoInput.value = movimiento.monto;
     tipoSelect.value = movimiento.tipo;
-    categoriaSelect.value = movimiento.categoria;
+    poblarCategorias(movimiento.tipo, movimiento.categoria);
     fechaInput.value = movimiento.fecha;
     editandoId = movimiento.id;
+
+    formTitle.textContent = "Editar movimiento";
     document.getElementById("addMovimientoBtn").textContent = "Guardar cambios";
+    btnCancelEdit.classList.remove("d-none");
+    form.scrollIntoView({ behavior: "smooth" });
   }
+
   if (e.target.classList.contains("btn-eliminar")) {
-    const id = Number(e.target.dataset.id);
+    const id = e.target.dataset.id;
     const movimiento = movimientos.find((m) => m.id === id);
     if (!movimiento) return;
+
     let label = movimiento.concepto;
     if (label.length > 60) label = label.substring(0, 60) + "...";
-    if (!confirm(`¿Eliminar movimiento "${label}"?`)) return;
+
+    const confirmado = await showConfirm(`¿Eliminar movimiento "${label}"?`);
+    if (!confirmado) return;
+
     movimientos = movimientos.filter((m) => m.id !== id);
-    localStorage.setItem("movimientos", JSON.stringify(movimientos));
+    if (!guardarMovimientos()) return;
+
+    // Si se borró el movimiento que se estaba editando, limpiar el formulario.
+    if (editandoId === id) cancelarEdicion();
+
     renderMovimientos();
     actualizarBalance();
     actualizarChartGastos();
     actualizarChartEvolucion();
+    showToast("Movimiento eliminado.", "success");
   }
 });
 
@@ -275,6 +423,11 @@ document.getElementById("filterFechaDesde").addEventListener("change", (e) => {
 
 document.getElementById("filterFechaHasta").addEventListener("change", (e) => {
   filterFechaHasta = e.target.value;
+  aplicarFiltros();
+});
+
+document.getElementById("filterMontoMin").addEventListener("input", (e) => {
+  filterMontoMin = e.target.value;
   aplicarFiltros();
 });
 
@@ -330,7 +483,6 @@ document.getElementById("btnDarkMode").addEventListener("click", () => {
 const fileInput = document.getElementById("fileInput");
 const btnImportCSV = document.getElementById("btnImportCSV");
 
-// El botón solo dispara el input oculto
 btnImportCSV.addEventListener("click", () => fileInput.click());
 
 fileInput.addEventListener("change", (e) => {
@@ -344,31 +496,39 @@ fileInput.addEventListener("change", (e) => {
     const resultado = parsearCSV(contenido);
 
     if (resultado.movimientos.length === 0) {
-      alert("No se pudo importar ningún movimiento. Revisá el formato del archivo.");
+      showToast(
+        "No se pudo importar ningún movimiento. Revisá el formato del archivo.",
+        "danger",
+      );
       fileInput.value = "";
       return;
     }
 
-    // Agregar los nuevos movimientos al array existente
-    movimientos.push(...resultado.movimientos);
-    localStorage.setItem("movimientos", JSON.stringify(movimientos));
+    movimientos = [...movimientos, ...resultado.movimientos];
+    if (!guardarMovimientos()) {
+      fileInput.value = "";
+      return;
+    }
+
     renderMovimientos();
     actualizarBalance();
     actualizarChartGastos();
     actualizarChartEvolucion();
-    fileInput.value = ""; // limpia para permitir re-seleccionar el mismo archivo
+    fileInput.value = "";
 
-    // Mostrar resumen
-    const msg = `✅ ${resultado.movimientos.length} movimiento(s) importado(s)`;
+    const msg = `${resultado.movimientos.length} movimiento(s) importado(s)`;
     if (resultado.errores.length > 0) {
-      alert(`${msg}\n⚠️ ${resultado.errores.length} línea(s) con errores (se omitieron)`);
+      showToast(
+        `${msg}. ${resultado.errores.length} línea(s) con errores (omitidas).`,
+        "warning",
+      );
     } else {
-      alert(msg);
+      showToast(`✅ ${msg}`, "success");
     }
   };
 
   lector.onerror = () => {
-    alert("Error al leer el archivo.");
+    showToast("Error al leer el archivo.", "danger");
     fileInput.value = "";
   };
 
@@ -378,48 +538,68 @@ fileInput.addEventListener("change", (e) => {
 /**
  * Parsea contenido CSV y devuelve movimientos válidos + errores.
  * Formato esperado: Fecha;Tipo;Categoría;Concepto;Monto
+ *
+ * Valida la categoría contra el set correspondiente al tipo de cada línea
+ * (no una lista global), igual que en el formulario de alta.
  */
 function parsearCSV(texto) {
   const lineas = texto.split(/\r?\n/).filter((l) => l.trim() !== "");
-  const movimientosNuevos = [];
   const errores = [];
 
-  // Si hay BOM (marca de orden de bytes UTF-8), lo sacamos
   if (lineas.length > 0) {
     lineas[0] = lineas[0].replace(/^\uFEFF/, "");
   }
 
-  for (let i = 1; i < lineas.length; i++) {
-    const partes = lineas[i].split(";");
+  const movimientosNuevos = lineas.slice(1).reduce((acc, linea, idx) => {
+    const numLinea = idx + 2;
+    const partes = linea.split(";");
 
     if (partes.length < 5) {
-      errores.push({ linea: i + 1, razon: "Faltan columnas" });
-      continue;
+      errores.push({ linea: numLinea, razon: "Faltan columnas" });
+      return acc;
     }
 
-    const [fecha, tipo, categoria, concepto, montoStr] = partes;
+    const [fecha, tipoRaw, categoria, concepto, montoStr] = partes;
+    const tipo = tipoRaw.trim().toLowerCase();
+    const categoriaLimpia = categoria.trim().toLowerCase();
 
     if (!fecha || !tipo || !concepto) {
-      errores.push({ linea: i + 1, razon: "Campos obligatorios vacíos" });
-      continue;
+      errores.push({ linea: numLinea, razon: "Campos obligatorios vacíos" });
+      return acc;
     }
 
-    // El monto puede venir con signo (-2.70) o sin él (2.70)
+    if (tipo !== "ingreso" && tipo !== "gasto") {
+      errores.push({ linea: numLinea, razon: `Tipo inválido: "${tipoRaw}"` });
+      return acc;
+    }
+
+    const categoriasValidasDelTipo = Object.keys(getCategoriasPorTipo(tipo));
+    if (!categoriasValidasDelTipo.includes(categoriaLimpia)) {
+      errores.push({
+        linea: numLinea,
+        razon: `Categoría "${categoria}" no válida para tipo "${tipo}"`,
+      });
+      return acc;
+    }
+
     const monto = Math.abs(Number(montoStr.replace(",", ".")));
     if (!monto || monto <= 0) {
-      errores.push({ linea: i + 1, razon: `Monto inválido: "${montoStr}"` });
-      continue;
+      errores.push({ linea: numLinea, razon: `Monto inválido: "${montoStr}"` });
+      return acc;
     }
 
-    movimientosNuevos.push({
-      id: Date.now() + i,
-      concepto: concepto.trim(),
-      monto,
-      tipo: tipo.trim().toLowerCase(),
-      categoria: categoria.trim().toLowerCase(),
-      fecha: fecha.trim(),
-    });
-  }
+    return [
+      ...acc,
+      {
+        id: crypto.randomUUID(),
+        concepto: concepto.trim(),
+        monto,
+        tipo,
+        categoria: categoriaLimpia,
+        fecha: fecha.trim(),
+      },
+    ];
+  }, []);
 
   return { movimientos: movimientosNuevos, errores };
 }
@@ -431,26 +611,34 @@ function parsearCSV(texto) {
 let chartGastos = null;
 
 function actualizarChartGastos() {
-  const gastos = movimientos.filter((m) => m.tipo === "gasto");
-  const categorias = {};
-  for (let i = 0; i < gastos.length; i++) {
-    const cat = gastos[i].categoria;
-    categorias[cat] = (categorias[cat] || 0) + gastos[i].monto;
-  }
+  const categorias = movimientos
+    .filter((m) => m.tipo === "gasto")
+    .reduce(
+      (acc, m) => ({
+        ...acc,
+        [m.categoria]: (acc[m.categoria] || 0) + m.monto,
+      }),
+      {},
+    );
 
-  const labels = Object.keys(categorias);
+  const labels = Object.keys(categorias).map(getEtiquetaCategoria);
   const data = Object.values(categorias);
   const colores = {
     alimentacion: "#ff6384",
     transporte: "#36a2eb",
     entretenimiento: "#ffce56",
     salud: "#4bc0c0",
-    otros: "#9966ff",
+    "otros-gasto": "#9966ff",
   };
+
+  const backgroundColor = Object.keys(categorias).map(
+    (c) => colores[c] || "#cccccc",
+  );
 
   if (chartGastos) {
     chartGastos.data.labels = labels;
     chartGastos.data.datasets[0].data = data;
+    chartGastos.data.datasets[0].backgroundColor = backgroundColor;
     chartGastos.update();
     return;
   }
@@ -459,11 +647,13 @@ function actualizarChartGastos() {
     type: "doughnut",
     data: {
       labels,
-      datasets: [{
-        data,
-        backgroundColor: labels.map((l) => colores[l] || "#cccccc"),
-        borderWidth: 0,
-      }],
+      datasets: [
+        {
+          data,
+          backgroundColor,
+          borderWidth: 0,
+        },
+      ],
     },
     options: {
       responsive: true,
@@ -483,19 +673,21 @@ let chartEvolucion = null;
 
 function actualizarChartEvolucion() {
   const ordenados = [...movimientos].sort(
-    (a, b) => new Date(a.fecha) - new Date(b.fecha)
+    (a, b) => new Date(a.fecha) - new Date(b.fecha),
   );
 
-  const labels = [];
-  const data = [];
-  let acumulado = 0;
-
-  for (let i = 0; i < ordenados.length; i++) {
-    const m = ordenados[i];
-    acumulado += m.tipo === "ingreso" ? m.monto : -m.monto;
-    labels.push(m.fecha);
-    data.push(acumulado);
-  }
+  const { labels, data } = ordenados.reduce(
+    (acc, m) => {
+      const delta = m.tipo === "ingreso" ? m.monto : -m.monto;
+      const acumulado = acc.acumulado + delta;
+      return {
+        labels: [...acc.labels, m.fecha],
+        data: [...acc.data, acumulado],
+        acumulado,
+      };
+    },
+    { labels: [], data: [], acumulado: 0 },
+  );
 
   const oscuro = document.body.classList.contains("dark-mode");
   const textColor = oscuro ? "#e0e0e0" : "#666";
@@ -515,16 +707,18 @@ function actualizarChartEvolucion() {
     type: "line",
     data: {
       labels,
-      datasets: [{
-        label: "Balance (€)",
-        data,
-        borderColor: "#667eea",
-        backgroundColor: "rgba(102, 126, 234, 0.1)",
-        fill: true,
-        tension: 0.3,
-        pointRadius: 4,
-        pointBackgroundColor: "#667eea",
-      }],
+      datasets: [
+        {
+          label: "Balance (€)",
+          data,
+          borderColor: "#667eea",
+          backgroundColor: "rgba(102, 126, 234, 0.1)",
+          fill: true,
+          tension: 0.3,
+          pointRadius: 4,
+          pointBackgroundColor: "#667eea",
+        },
+      ],
     },
     options: {
       responsive: true,

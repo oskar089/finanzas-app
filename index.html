@@ -6,222 +6,692 @@
     <link
       href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css"
       rel="stylesheet" />
+    <link
+      href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css"
+      rel="stylesheet" />
     <link rel="stylesheet" href="styles.css" />
     <title>Finanzas App</title>
   </head>
   <body>
-    <header>
-      <button
-        id="btnDarkMode"
-        class="dark-mode-toggle"
-        aria-label="Alternar modo oscuro">
-        🌙
-      </button>
-      <h1>Finanzas App</h1>
-      <p>Bienvenido a tu aplicación de finanzas personal.</p>
-    </header>
-    <main>
-      <div class="container mt-4">
-        <div class="row">
-          <div class="col-12">
-            <div class="card">
-              <div class="card-body">
-                <span id="totalBalance">Balance: €0.00</span>
-              </div>
+    <!-- ============================================================ -->
+    <!-- AUTH SCREEN -->
+    <!-- ============================================================ -->
+    <div id="authScreen" class="auth-screen">
+      <div class="auth-card">
+        <!-- Left Panel - Illustration -->
+        <div class="auth-left">
+          <div class="auth-illustration">
+            <div class="illustration-circle">
+              <i class="bi bi-wallet2 illustration-icon"></i>
+            </div>
+            <h2 class="illustration-title">HELLO</h2>
+            <p class="illustration-subtitle">Gestioná tus finanzas personales</p>
+            <div class="illustration-dots">
+              <span class="dot active"></span>
+              <span class="dot"></span>
+              <span class="dot"></span>
             </div>
           </div>
         </div>
 
-        <div class="row">
-          <div class="col-md-6">
-            <div class="card">
-              <div class="card-header">Gastos por categoría</div>
-              <div class="card-body">
-                <canvas id="chartGastos"></canvas>
-              </div>
+        <!-- Right Panel - Form -->
+        <div class="auth-right">
+          <div class="auth-form-container">
+            <!-- Avatar -->
+            <div class="auth-avatar">
+              <i class="bi bi-person-fill"></i>
             </div>
-          </div>
-          <div class="col-md-6">
-            <div class="card">
-              <div class="card-header">Evolución del balance</div>
-              <div class="card-body">
-                <canvas id="chartEvolucion"></canvas>
+
+            <!-- Form -->
+            <form id="authForm">
+              <div class="input-group">
+                <i class="bi bi-envelope-fill input-icon"></i>
+                <input
+                  type="email"
+                  id="authEmail"
+                  class="form-control"
+                  placeholder="EMAIL"
+                  required />
               </div>
-            </div>
+
+              <div class="input-group">
+                <i class="bi bi-lock-fill input-icon"></i>
+                <input
+                  type="password"
+                  id="authPassword"
+                  class="form-control"
+                  placeholder="PASSWORD"
+                  required
+                  minlength="6" />
+                <button
+                  type="button"
+                  class="toggle-password"
+                  onclick="togglePassword()">
+                  <i class="bi bi-eye-fill"></i>
+                </button>
+              </div>
+
+              <!-- Name field (hidden by default) -->
+              <div id="nameField" class="input-group d-none">
+                <i class="bi bi-person-fill input-icon"></i>
+                <input
+                  type="text"
+                  id="authName"
+                  class="form-control"
+                  placeholder="YOUR NAME"
+                  required />
+              </div>
+
+              <!-- Remember me / Forgot password -->
+              <div class="auth-options">
+                <label class="remember-me">
+                  <input type="checkbox" id="rememberMe" />
+                  <span>Remember me</span>
+                </label>
+                <a href="#" class="forgot-password">Forgot Password?</a>
+              </div>
+
+              <div id="authError" class="auth-error"></div>
+
+              <!-- Submit Button -->
+              <button type="submit" id="authSubmitBtn" class="auth-btn">
+                LOGIN
+              </button>
+            </form>
+
+            <!-- Register Link -->
+            <p class="auth-register">
+              Don't have an account yet? <a href="#" id="authToggleLink">Create an account</a>
+            </p>
           </div>
         </div>
+      </div>
+    </div>
 
-        <div class="row">
-          <div class="col-12">
-            <div class="card">
-              <div class="card-header">Filtrar movimientos</div>
-              <div class="card-body">
-                <div class="row g-3">
-                  <div class="col-md-3">
-                    <label for="filterTipo">Tipo</label>
-                    <select id="filterTipo" class="form-select">
-                      <option value="todos">Todos</option>
-                      <option value="ingreso">Ingresos</option>
-                      <option value="gasto">Gastos</option>
+    <!-- ============================================================ -->
+    <!-- MAIN APP -->
+    <!-- ============================================================ -->
+    <div id="mainApp" class="d-none">
+      <header>
+        <div class="header-content">
+          <button
+            id="btnDarkMode"
+            class="dark-mode-toggle"
+            aria-label="Alternar modo oscuro">
+            🌙
+          </button>
+          <h1>Finanzas App</h1>
+          <p>Bienvenido, <span id="userName">Usuario</span></p>
+        </div>
+        <button id="btnLogout" class="btn btn-outline-danger btn-sm">
+          Cerrar Sesión
+        </button>
+      </header>
+
+      <main>
+        <div class="container mt-4">
+          <!-- Balance -->
+          <div class="row">
+            <div class="col-12">
+              <div class="card">
+                <div class="card-body">
+                  <span id="totalBalance">Balance: $0.00</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Account Selector -->
+          <div class="row">
+            <div class="col-12">
+              <div class="card">
+                <div class="card-header">Cuenta</div>
+                <div class="card-body">
+                  <div class="d-flex gap-2 align-items-center">
+                    <select id="accountSelect" class="form-select">
+                      <option value="">Cargando cuentas...</option>
                     </select>
-                  </div>
-                  <div class="col-md-3">
-                    <label for="filterCategoria">Categoría</label>
-                    <select id="filterCategoria" class="form-select">
-                      <option value="todas">Todas</option>
-                      <option value="alimentacion">Alimentación</option>
-                      <option value="transporte">Transporte</option>
-                      <option value="entretenimiento">Entretenimiento</option>
-                      <option value="salud">Salud</option>
-                      <option value="otros">Otros</option>
-                    </select>
-                  </div>
-                  <div class="col-md-3">
-                    <label for="filterFechaDesde">Fecha desde</label>
-                    <input type="date" id="filterFechaDesde" class="form-control" />
-                  </div>
-                  <div class="col-md-3">
-                    <label for="filterFechaHasta">Fecha hasta</label>
-                    <input type="date" id="filterFechaHasta" class="form-control" />
-                  </div>
-                  <div class="col-md-3">
-                    <label for="filterMontoMax">Monto máx.</label>
-                    <input
-                      type="number"
-                      id="filterMontoMax"
-                      class="form-control"
-                      placeholder="€" />
-                  </div>
-                  <div class="col-md-3">
-                    <label for="filterConcepto">Concepto</label>
-                    <input
-                      type="text"
-                      id="filterConcepto"
-                      class="form-control"
-                      placeholder="Buscar por concepto..." />
+                    <button
+                      id="btnManageAccounts"
+                      class="btn btn-outline-primary"
+                      type="button">
+                      <i class="bi bi-gear"></i> Administrar
+                    </button>
                   </div>
                 </div>
               </div>
             </div>
           </div>
-        </div>
 
-        <div class="row">
-          <div class="col-12">
-            <div class="card">
-              <div class="card-header">Nuevo Movimiento</div>
-              <div class="card-body">
-                <form id="addMovementForm">
+          <!-- Accounts Management -->
+          <div class="row d-none" id="accountManagementRow">
+            <div class="col-12">
+              <div class="card">
+                <div class="card-header" id="accountFormTitle">
+                  Nueva Cuenta
+                </div>
+                <div class="card-body">
+                  <form id="accountForm">
+                    <div class="row g-3">
+                      <div class="col-md-3">
+                        <label class="form-label" for="accountName"
+                          >Nombre</label
+                        >
+                        <input
+                          type="text"
+                          id="accountName"
+                          class="form-control"
+                          placeholder="Ej: Principal"
+                          required />
+                      </div>
+                      <div class="col-md-3">
+                        <label class="form-label" for="accountType"
+                          >Tipo</label
+                        >
+                        <select id="accountType" class="form-select" required>
+                          <option value="CHECKING">CHECKING</option>
+                          <option value="SAVINGS">SAVINGS</option>
+                          <option value="CREDIT_CARD">CREDIT_CARD</option>
+                          <option value="CASH">CASH</option>
+                        </select>
+                      </div>
+                      <div class="col-md-3">
+                        <label class="form-label" for="accountCurrency"
+                          >Moneda</label
+                        >
+                        <input
+                          type="text"
+                          id="accountCurrency"
+                          class="form-control"
+                          value="USD"
+                          placeholder="USD"
+                          maxlength="3" />
+                      </div>
+                      <div class="col-md-3">
+                        <label class="form-label" for="accountBalance"
+                          >Balance inicial ($)</label
+                        >
+                        <input
+                          type="number"
+                          id="accountBalance"
+                          class="form-control"
+                          placeholder="0.00"
+                          step="0.01" />
+                      </div>
+                    </div>
+                    <div class="row g-2 mt-3">
+                      <div class="col-md-3">
+                        <button
+                          type="submit"
+                          id="saveAccountBtn"
+                          class="btn btn-primary w-100">
+                          Guardar Cuenta
+                        </button>
+                      </div>
+                      <div class="col-md-3">
+                        <button
+                          type="button"
+                          id="cancelAccountEditBtn"
+                          class="btn btn-outline-secondary w-100 d-none">
+                          Cancelar
+                        </button>
+                      </div>
+                    </div>
+                  </form>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Accounts List -->
+          <div class="row d-none" id="accountListRow">
+            <div class="col-12">
+              <div class="card">
+                <div class="card-header">Tus Cuentas</div>
+                <div class="card-body">
+                  <table class="table">
+                    <thead>
+                      <tr>
+                        <th>Nombre</th>
+                        <th>Tipo</th>
+                        <th>Balance</th>
+                        <th>Moneda</th>
+                        <th>Acciones</th>
+                      </tr>
+                    </thead>
+                    <tbody id="accountsTableBody"></tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Charts -->
+          <div class="row">
+            <div class="col-md-4">
+              <div class="card">
+                <div class="card-header">Gastos por categoría</div>
+                <div class="card-body">
+                  <canvas id="chartGastos"></canvas>
+                </div>
+              </div>
+            </div>
+            <div class="col-md-4">
+              <div class="card">
+                <div class="card-header">Evolución del balance</div>
+                <div class="card-body">
+                  <canvas id="chartEvolucion"></canvas>
+                </div>
+              </div>
+            </div>
+            <div class="col-md-4">
+              <div class="card">
+                <div class="card-header">Comparación Mensual</div>
+                <div class="card-body">
+                  <canvas id="chartMensual"></canvas>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Filters -->
+          <div class="row">
+            <div class="col-12">
+              <div class="card">
+                <div class="card-header">Filtrar movimientos</div>
+                <div class="card-body">
                   <div class="row g-3">
-                    <div class="col-md-4">
-                      <label class="form-label" for="concepto">Concepto</label>
-                      <input
-                        type="text"
-                        id="concepto"
-                        class="form-control"
-                        placeholder="Ej: Café"
-                        required />
-                    </div>
-                    <div class="col-md-2">
-                      <label class="form-label" for="monto">Monto (€)</label>
-                      <input
-                        type="text"
-                        id="monto"
-                        class="form-control"
-                        placeholder="0.00"
-                        inputmode="decimal"
-                        required />
-                    </div>
-                    <div class="col-md-2">
-                      <label class="form-label" for="tipo">Tipo</label>
-                      <select id="tipo" class="form-select" required>
-                        <option value="ingreso">💰 Ingreso</option>
-                        <option value="gasto">💸 Gasto</option>
+                    <div class="col-md-3">
+                      <label for="filterTipo">Tipo</label>
+                      <select id="filterTipo" class="form-select">
+                        <option value="todos">Todos</option>
+                        <option value="ingreso">Ingresos</option>
+                        <option value="gasto">Gastos</option>
                       </select>
                     </div>
-                    <div class="col-md-2">
-                      <label class="form-label" for="categoria"
-                        >Categoría</label
-                      >
-                      <select id="categoria" class="form-select" required>
-                        <option value="alimentacion">Alimentación</option>
-                        <option value="transporte">Transporte</option>
-                        <option value="entretenimiento">Entretenimiento</option>
-                        <option value="salud">Salud</option>
-                        <option value="otros">Otros</option>
+                    <div class="col-md-3">
+                      <label for="filterCategoria">Categoría</label>
+                      <select id="filterCategoria" class="form-select">
+                        <option value="todas">Todas</option>
+                        <optgroup label="Gastos">
+                          <option value="alimentacion">Alimentación</option>
+                          <option value="transporte">Transporte</option>
+                          <option value="entretenimiento">Entretenimiento</option>
+                          <option value="salud">Salud</option>
+                          <option value="housing">Vivienda</option>
+                          <option value="utilities">Servicios</option>
+                          <option value="otros-gasto">Otros (gasto)</option>
+                        </optgroup>
+                        <optgroup label="Ingresos">
+                          <option value="sueldo">Sueldo</option>
+                          <option value="freelance">Freelance</option>
+                          <option value="inversiones">Inversiones</option>
+                          <option value="otros-ingreso">Otros (ingreso)</option>
+                        </optgroup>
                       </select>
                     </div>
-                    <div class="col-md-2">
-                      <label class="form-label" for="fecha">Fecha</label>
+                    <div class="col-md-3">
+                      <label for="filterFechaDesde">Fecha desde</label>
                       <input
                         type="date"
-                        id="fecha"
+                        id="filterFechaDesde"
+                        class="form-control" />
+                    </div>
+                    <div class="col-md-3">
+                      <label for="filterFechaHasta">Fecha hasta</label>
+                      <input
+                        type="date"
+                        id="filterFechaHasta"
+                        class="form-control" />
+                    </div>
+                    <div class="col-md-3">
+                      <label for="filterMontoMin">Monto mín.</label>
+                      <input
+                        type="number"
+                        id="filterMontoMin"
                         class="form-control"
-                        required />
+                        placeholder="$" />
+                    </div>
+                    <div class="col-md-3">
+                      <label for="filterMontoMax">Monto máx.</label>
+                      <input
+                        type="number"
+                        id="filterMontoMax"
+                        class="form-control"
+                        placeholder="$" />
+                    </div>
+                    <div class="col-md-3">
+                      <label for="filterConcepto">Concepto</label>
+                      <input
+                        type="text"
+                        id="filterConcepto"
+                        class="form-control"
+                        placeholder="Buscar por concepto..." />
                     </div>
                   </div>
+                </div>
+              </div>
+            </div>
+          </div>
 
-                  <div class="row g-2 mt-3">
-                    <div class="col-md-4">
-                      <button
-                        type="submit"
-                        id="addMovimientoBtn"
-                        class="btn btn-primary w-100">
-                        + Agregar Movimiento
-                      </button>
+          <!-- Form -->
+          <div class="row">
+            <div class="col-12">
+              <div class="card">
+                <div class="card-header" id="formTitle">Nuevo Movimiento</div>
+                <div class="card-body">
+                  <form id="addMovementForm">
+                    <div class="row g-3">
+                      <div class="col-md-4">
+                        <label class="form-label" for="concepto">Concepto</label>
+                        <input
+                          type="text"
+                          id="concepto"
+                          class="form-control"
+                          placeholder="Ej: Café"
+                          required />
+                      </div>
+                      <div class="col-md-2">
+                        <label class="form-label" for="monto">Monto ($)</label>
+                        <input
+                          type="text"
+                          id="monto"
+                          class="form-control"
+                          placeholder="0.00"
+                          inputmode="decimal"
+                          required />
+                      </div>
+                      <div class="col-md-2">
+                        <label class="form-label" for="tipo">Tipo</label>
+                        <select id="tipo" class="form-select" required>
+                          <option value="gasto">💸 Gasto</option>
+                          <option value="ingreso">💰 Ingreso</option>
+                        </select>
+                      </div>
+                      <div class="col-md-2">
+                        <label class="form-label" for="categoria">Categoría</label>
+                        <select id="categoria" class="form-select" required>
+                          <option value="alimentacion">Alimentación</option>
+                          <option value="transporte">Transporte</option>
+                          <option value="entretenimiento">Entretenimiento</option>
+                          <option value="salud">Salud</option>
+                          <option value="housing">Vivienda</option>
+                          <option value="utilities">Servicios</option>
+                          <option value="otros-gasto">Otros</option>
+                        </select>
+                      </div>
+                      <div class="col-md-2">
+                        <label class="form-label" for="fecha">Fecha</label>
+                        <input
+                          type="date"
+                          id="fecha"
+                          class="form-control"
+                          required />
+                      </div>
+                    </div>
+                    <div class="row g-2 mt-3">
+                      <div class="col-md-3">
+                        <button
+                          type="submit"
+                          id="addMovimientoBtn"
+                          class="btn btn-primary w-100">
+                          + Agregar Movimiento
+                        </button>
+                      </div>
+                      <div class="col-md-3">
+                        <button
+                          type="button"
+                          id="btnCancelEdit"
+                          class="btn btn-outline-secondary w-100 d-none">
+                          Cancelar edición
+                        </button>
+                      </div>
+                      <div class="col-md-3">
+                        <button
+                          type="button"
+                          id="btnExportCSV"
+                          class="btn btn-success w-100">
+                          📥 Exportar CSV
+                        </button>
+                      </div>
+                      <div class="col-md-3">
+                        <button
+                          type="button"
+                          id="btnImportCSV"
+                          class="btn btn-info w-100">
+                          📤 Importar CSV
+                        </button>
+                      </div>
+                    </div>
+                  </form>
+                  <input type="file" id="fileInput" accept=".csv" hidden />
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Transactions Table -->
+          <div class="row">
+            <div class="col-12">
+              <div class="card">
+                <div class="card-header">Movimientos</div>
+                <div class="card-body">
+                  <table class="table">
+                    <thead>
+                      <tr>
+                        <th data-column="fecha">Fecha</th>
+                        <th data-column="concepto">Concepto</th>
+                        <th data-column="tipo">Tipo</th>
+                        <th data-column="categoria">Categoria</th>
+                        <th data-column="monto">Monto ($)</th>
+                        <th>Acciones</th>
+                      </tr>
+                    </thead>
+                    <tbody id="movimientosTableBody"></tbody>
+                  </table>
+                  <!-- Pagination -->
+                  <div id="paginationControls" class="d-none">
+                    <nav>
+                      <ul class="pagination justify-content-center mb-0">
+                        <li class="page-item" id="prevPageBtn">
+                          <button class="page-link" type="button">
+                            &laquo; Anterior
+                          </button>
+                        </li>
+                        <li class="page-item disabled">
+                          <span class="page-link" id="pageIndicator">
+                            Página 1 de 1
+                          </span>
+                        </li>
+                        <li class="page-item" id="nextPageBtn">
+                          <button class="page-link" type="button">
+                            Siguiente &raquo;
+                          </button>
+                        </li>
+                      </ul>
+                    </nav>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- ============================================================ -->
+          <!-- BUDGETS -->
+          <!-- ============================================================ -->
+          <div class="row mt-4">
+            <div class="col-12">
+              <h4 class="text-white mb-3">Presupuestos</h4>
+            </div>
+          </div>
+
+          <!-- Budget Controls -->
+          <div class="row">
+            <div class="col-12">
+              <div class="card">
+                <div class="card-header">Control de Presupuestos</div>
+                <div class="card-body">
+                  <div class="row g-3 align-items-end">
+                    <div class="col-md-3">
+                      <label class="form-label" for="budgetMonth">Mes</label>
+                      <select id="budgetMonth" class="form-select"></select>
+                    </div>
+                    <div class="col-md-3">
+                      <label class="form-label" for="budgetYear">Año</label>
+                      <select id="budgetYear" class="form-select"></select>
                     </div>
                     <div class="col-md-4">
-                      <button
-                        type="button"
-                        id="btnExportCSV"
-                        class="btn btn-success w-100">
-                        📥 Exportar CSV
-                      </button>
-                    </div>
-                    <div class="col-md-4">
-                      <button
-                        type="button"
-                        id="btnImportCSV"
-                        class="btn btn-info w-100">
-                        📤 Importar CSV
+                      <label class="form-label">&nbsp;</label>
+                      <button id="btnCopyBudgets" class="btn btn-info w-100" type="button">
+                        <i class="bi bi-copy"></i> Copiar al próximo mes
                       </button>
                     </div>
                   </div>
-                </form>
-                <input type="file" id="fileInput" accept=".csv" hidden />
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Budget Form -->
+          <div class="row">
+            <div class="col-12">
+              <div class="card">
+                <div class="card-header" id="budgetFormTitle">Nuevo Presupuesto</div>
+                <div class="card-body">
+                  <form id="budgetForm">
+                    <div class="row g-3">
+                      <div class="col-md-3">
+                        <label class="form-label" for="budgetCategory">Categoría</label>
+                        <select id="budgetCategory" class="form-select" required>
+                          <option value="alimentacion">Alimentación</option>
+                          <option value="transporte">Transporte</option>
+                          <option value="entretenimiento">Entretenimiento</option>
+                          <option value="salud">Salud</option>
+                          <option value="housing">Vivienda</option>
+                          <option value="utilities">Servicios</option>
+                          <option value="otros-gasto">Otros</option>
+                        </select>
+                      </div>
+                      <div class="col-md-3">
+                        <label class="form-label" for="budgetAmount">Monto presupuestado ($)</label>
+                        <input type="number" id="budgetAmount" class="form-control" placeholder="0.00" step="0.01" required />
+                      </div>
+                      <div class="col-md-2">
+                        <label class="form-label">&nbsp;</label>
+                        <button type="submit" id="saveBudgetBtn" class="btn btn-primary w-100">Guardar</button>
+                      </div>
+                      <div class="col-md-2">
+                        <label class="form-label">&nbsp;</label>
+                        <button type="button" id="cancelBudgetEditBtn" class="btn btn-outline-secondary w-100 d-none">Cancelar</button>
+                      </div>
+                    </div>
+                  </form>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Budget List -->
+          <div class="row">
+            <div class="col-12">
+              <div class="card">
+                <div class="card-header">Tus Presupuestos</div>
+                <div class="card-body">
+                  <div id="budgetsContainer">
+                    <p class="text-muted mb-0">Cargando presupuestos...</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- ============================================================ -->
+          <!-- FAMILY GROUPS -->
+          <!-- ============================================================ -->
+          <div class="row mt-4">
+            <div class="col-12">
+              <h4 class="text-white mb-3">Grupos Familiares</h4>
+            </div>
+          </div>
+
+          <!-- Create Group Form -->
+          <div class="row">
+            <div class="col-12">
+              <div class="card">
+                <div class="card-header">Nuevo Grupo Familiar</div>
+                <div class="card-body">
+                  <form id="familyGroupForm">
+                    <div class="row g-3 align-items-end">
+                      <div class="col-md-4">
+                        <label class="form-label" for="familyGroupName">Nombre del grupo</label>
+                        <input type="text" id="familyGroupName" class="form-control" placeholder="Ej: Familia García" required />
+                      </div>
+                      <div class="col-md-2">
+                        <label class="form-label">&nbsp;</label>
+                        <button type="submit" class="btn btn-primary w-100">Crear Grupo</button>
+                      </div>
+                    </div>
+                  </form>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Groups Container (rendered by JS) -->
+          <div class="row">
+            <div class="col-12">
+              <div id="familyGroupsContainer">
+                <p class="text-muted mb-0">Cargando grupos familiares...</p>
               </div>
             </div>
           </div>
         </div>
+      </main>
 
-        <div class="row">
-          <div class="col-12">
-            <div class="card">
-              <div class="card-header">Movimientos</div>
-              <div class="card-body">
-                <table class="table">
-                  <thead>
-                    <tr>
-                      <th data-column="fecha">Fecha</th>
-                      <th data-column="concepto">Concepto</th>
-                      <th data-column="tipo">Tipo</th>
-                      <th data-column="categoria">Categoria</th>
-                      <th data-column="monto">Monto (€)</th>
-                      <th>Acciones</th>
-                    </tr>
-                  </thead>
-                  <tbody id="movimientosTableBody"></tbody>
-                </table>
-              </div>
-            </div>
-          </div>
+      <footer>
+        <p>&copy; 2026 Finanzas App. Todos los derechos reservados.</p>
+      </footer>
+    </div>
+
+    <!-- Toasts -->
+    <div id="toastContainer" class="toast-container"></div>
+
+    <!-- Confirm Overlay -->
+    <div id="confirmOverlay" class="confirm-overlay d-none">
+      <div class="confirm-box">
+        <p id="confirmMessage"></p>
+        <div class="d-flex justify-content-end gap-2">
+          <button
+            id="confirmCancelBtn"
+            class="btn btn-outline-secondary btn-sm">
+            Cancelar
+          </button>
+          <button id="confirmAcceptBtn" class="btn btn-danger btn-sm">
+            Confirmar
+          </button>
         </div>
       </div>
-    </main>
-    <footer>
-      <p>&copy; 2026 Finanzas App. Todos los derechos reservados.</p>
-    </footer>
+    </div>
+
+    <!-- Scripts -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
-    <script src="app.js"></script>
+    <script type="module" src="js/auth.js"></script>
+    <script type="module" src="js/app.js"></script>
+    <!-- [DEPRECATED] app.js legacy — reemplazado por js/app.js (ES modules).
+         Se mantiene el archivo pero sin cargarlo para evitar conflictos de DOM.
+         app.js original contiene ABM local con localStorage. -->
+    <script>
+      function togglePassword() {
+        const input = document.getElementById('authPassword');
+        const icon = document.querySelector('.toggle-password i');
+        if (input.type === 'password') {
+          input.type = 'text';
+          icon.classList.replace('bi-eye-fill', 'bi-eye-slash-fill');
+        } else {
+          input.type = 'password';
+          icon.classList.replace('bi-eye-slash-fill', 'bi-eye-fill');
+        }
+      }
+    </script>
   </body>
 </html>

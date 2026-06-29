@@ -50,12 +50,14 @@ The system MUST update a transaction and adjust account balances accordingly.
 - WHEN PUT /api/transactions/:id is called with amount 150
 - THEN account A balance is reduced by an additional 50
 
-#### Known Issue: Update with accountId change
+#### Scenario: Update with accountId change
 
-- GIVEN an EXPENSE transaction on account A being updated to account B
-- WHEN the endpoint is called with a different accountId
-- THEN account A balance is NOT restored AND account B balance is NOT adjusted
-- AND this is a known bug — balance drift occurs
+- GIVEN an EXPENSE transaction of 100 on account A (balance 500)
+- AND the transaction is being updated to account B (balance 1000)
+- WHEN PUT /api/transactions/:id is called with accountId B
+- THEN account A balance is restored to 600 (reverses the expense)
+- AND account B balance is reduced to 900 (applies the expense)
+- AND all balance changes happen atomically within a Prisma $transaction
 
 ### Requirement: Delete Transaction
 
@@ -67,33 +69,33 @@ The system MUST delete a transaction and reverse its balance effect on the accou
 - WHEN DELETE /api/transactions/:id is called
 - THEN account A balance returns to 600 (pre-expense amount)
 
-### Requirement: CSV Export
+### Requirement: CSV Export (Client-Side)
 
-The system MUST export transactions as CSV with a BOM for Excel compatibility.
+The system MUST allow exporting transactions as CSV with a BOM for Excel compatibility. Export is implemented CLIENT-SIDE (not as a dedicated API endpoint).
 
 #### Scenario: Export filtered transactions
 
-- GIVEN a user with 20 transactions, 5 of type EXPENSE
-- WHEN GET /api/transactions/export?type=EXPENSE is called
-- THEN a CSV file is returned with BOM prefix and 5 expense rows
+- GIVEN a user with transactions loaded in the frontend
+- WHEN the user clicks "Export CSV"
+- THEN a CSV file is generated client-side with BOM prefix and downloaded
 
-### Requirement: CSV Import
+### Requirement: CSV Import (Bulk JSON)
 
-The system MUST import transactions from a CSV upload (bulk create).
+The system MUST support bulk transaction import. The frontend parses the CSV, then sends the data as JSON to a bulk API endpoint.
 
 #### Scenario: Import valid CSV
 
-- GIVEN an authenticated user with a valid CSV file containing 10 transaction rows
-- WHEN POST /api/transactions/import is called with the CSV file
-- THEN 10 transactions are created and account balances are adjusted accordingly
+- GIVEN an authenticated user with a valid CSV file
+- WHEN the frontend parses the CSV and POST /api/transactions/bulk is called with JSON array
+- THEN all transactions are created and account balances are adjusted atomically
 
 #### Scenario: Import with invalid row
 
 - GIVEN a CSV file with one row missing the amount field
-- WHEN POST /api/transactions/import is called
-- THEN the API returns a 400 error detailing the invalid row
-- AND no transactions from the file are persisted
+- WHEN the frontend parses the CSV and sends to POST /api/transactions/bulk
+- THEN the API returns a 400 error for the invalid row
+- AND valid rows are still created (partial success)
 
 ### Known Gap: Search
 
-The legacy FE supports concept/substring search but the canonical frontend does NOT expose a search input. This functionality exists on the backend but has no UI in the new SPA.
+The legacy FE supports concept/substring search but the canonical frontend did NOT expose a search input. This has been FIXED — the concept filter now works end-to-end (FE sends param, BE filters by description).

@@ -83,4 +83,4 @@ The system MUST allow ADMIN users to delete a family group entirely.
 
 #### Known Gap: Family Collaboration Frontend
 
-All family group endpoints exist on the backend. The canonical frontend has NO family collaboration UI — no group management, invite flow, or role management screens.
+All family group endpoints exist on the backend. The canonical frontend now HAS a complete family collaboration UI (`js/family.js` + `index.html` sections) including group management, invite by email, and role management.

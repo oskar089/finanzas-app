@@ -89,6 +89,14 @@ async function updateProfile(updates) {
   });
 }
 
+function loginWithGoogle() {
+  window.location.href = "/api/auth/google";
+}
+
+function loginWithApple() {
+  window.location.href = "/api/auth/apple";
+}
+
 function logout() {
   clearToken();
   window.location.reload();
@@ -136,6 +144,7 @@ async function getTransactions(params = {}) {
   if (params.limit) query.append("limit", params.limit);
   if (params.type) query.append("type", params.type);
   if (params.category) query.append("category", params.category);
+  if (params.categoryId) query.append("categoryId", params.categoryId);
   if (params.accountId) query.append("accountId", params.accountId);
   if (params.startDate) query.append("startDate", params.startDate);
   if (params.endDate) query.append("endDate", params.endDate);
@@ -247,6 +256,42 @@ async function getDashboardMonthly(params = {}) {
 }
 
 // ============================================================
+// CATEGORIES API
+// ============================================================
+
+async function getCategories(params = {}) {
+  const query = new URLSearchParams();
+  if (params.type) query.append("type", params.type);
+
+  const qs = query.toString();
+  return apiFetch(`/categories${qs ? "?" + qs : ""}`);
+}
+
+async function getCategory(id) {
+  return apiFetch(`/categories/${id}`);
+}
+
+async function createCategory(data) {
+  return apiFetch("/categories", {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+}
+
+async function updateCategory(id, data) {
+  return apiFetch(`/categories/${id}`, {
+    method: "PUT",
+    body: JSON.stringify(data),
+  });
+}
+
+async function deleteCategory(id) {
+  return apiFetch(`/categories/${id}`, {
+    method: "DELETE",
+  });
+}
+
+// ============================================================
 // FAMILY API
 // ============================================================
 
@@ -298,6 +343,8 @@ export {
   getMe,
   updateProfile,
   logout,
+  loginWithGoogle,
+  loginWithApple,
   isLoggedIn,
   getToken,
   // Accounts
@@ -323,6 +370,12 @@ export {
   // Dashboard
   getDashboard,
   getDashboardMonthly,
+  // Categories
+  getCategories,
+  getCategory,
+  createCategory,
+  updateCategory,
+  deleteCategory,
   // Family
   getFamilyGroups,
   createFamilyGroup,

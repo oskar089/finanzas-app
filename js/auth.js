@@ -1,4 +1,4 @@
-import { register, login, logout, isLoggedIn, getMe } from "./api.js";
+import { register, login, logout, isLoggedIn, getMe, loginWithGoogle, loginWithApple } from "./api.js";
 
 // ============================================================
 // DOM ELEMENTS
@@ -15,6 +15,8 @@ const authSubmitBtn = document.getElementById("authSubmitBtn");
 const authError = document.getElementById("authError");
 const authToggleLink = document.getElementById("authToggleLink");
 const btnLogout = document.getElementById("btnLogout");
+const btnGoogleLogin = document.getElementById("btnGoogleLogin");
+const btnAppleLogin = document.getElementById("btnAppleLogin");
 const userNameSpan = document.getElementById("userName");
 
 let isLoginMode = true;
@@ -92,6 +94,18 @@ authForm.addEventListener("submit", async (e) => {
 });
 
 // ============================================================
+// SOCIAL OAUTH BUTTONS
+// ============================================================
+
+btnGoogleLogin.addEventListener("click", () => {
+  loginWithGoogle();
+});
+
+btnAppleLogin.addEventListener("click", () => {
+  loginWithApple();
+});
+
+// ============================================================
 // LOGOUT
 // ============================================================
 
@@ -108,8 +122,8 @@ async function showMainApp() {
   mainApp.classList.remove("d-none");
 
   try {
-    const user = await getMe();
-    userNameSpan.textContent = user.name || user.email;
+    const data = await getMe();
+    userNameSpan.textContent = data.user?.name || data.user?.email || "Usuario";
   } catch {
     userNameSpan.textContent = "Usuario";
   }

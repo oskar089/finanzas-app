@@ -14,10 +14,12 @@ datasource db {
 model User {
   id              String    @id @default(uuid())
   email           String    @unique
-  password        String
+  password        String?
   name            String
   avatarUrl       String?   @map("avatar_url")
   defaultCurrency String    @default("USD") @map("default_currency")
+  googleId        String?   @unique @map("google_id")
+  appleId         String?   @unique @map("apple_id")
   createdAt       DateTime  @default(now()) @map("created_at")
   updatedAt       DateTime  @updatedAt @map("updated_at")
 

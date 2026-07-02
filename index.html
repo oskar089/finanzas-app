@@ -24,7 +24,7 @@
             <div class="illustration-circle">
               <i class="bi bi-wallet2 illustration-icon"></i>
             </div>
-            <h2 class="illustration-title">HELLO</h2>
+            <h2 class="illustration-title" id="authTitle">HELLO</h2>
             <p class="illustration-subtitle">Gestioná tus finanzas personales</p>
             <div class="illustration-dots">
               <span class="dot active"></span>
@@ -40,6 +40,19 @@
             <!-- Avatar -->
             <div class="auth-avatar">
               <i class="bi bi-person-fill"></i>
+            </div>
+
+            <!-- Social OAuth Buttons -->
+            <div class="social-auth-buttons">
+              <button type="button" id="btnGoogleLogin" class="social-btn google-btn">
+                <i class="bi bi-google"></i> Continuar con Google
+              </button>
+              <button type="button" id="btnAppleLogin" class="social-btn apple-btn">
+                <i class="bi bi-apple"></i> Continuar con Apple
+              </button>
+              <div class="social-divider">
+                <span>o usa tu email</span>
+              </div>
             </div>
 
             <!-- Form -->
@@ -113,19 +126,21 @@
     <!-- ============================================================ -->
     <div id="mainApp" class="d-none">
       <header>
-        <div class="header-content">
+        <div class="header-actions">
           <button
             id="btnDarkMode"
             class="dark-mode-toggle"
             aria-label="Alternar modo oscuro">
             🌙
           </button>
+          <button id="btnLogout" class="btn-logout-top">
+            Cerrar Sesión
+          </button>
+        </div>
+        <div class="header-content">
           <h1>Finanzas App</h1>
           <p>Bienvenido, <span id="userName">Usuario</span></p>
         </div>
-        <button id="btnLogout" class="btn btn-outline-danger btn-sm">
-          Cerrar Sesión
-        </button>
       </header>
 
       <main>
@@ -156,6 +171,12 @@
                       class="btn btn-outline-primary"
                       type="button">
                       <i class="bi bi-gear"></i> Administrar
+                    </button>
+                    <button
+                      id="btnManageCategories"
+                      class="btn btn-outline-info"
+                      type="button">
+                      <i class="bi bi-tags"></i> Categorías
                     </button>
                   </div>
                 </div>
@@ -266,6 +287,64 @@
             </div>
           </div>
 
+          <!-- Category Management -->
+          <div class="row d-none" id="categoryManagementRow">
+            <div class="col-12">
+              <div class="card">
+                <div class="card-header" id="categoryFormTitle">Nueva Categoría</div>
+                <div class="card-body">
+                  <form id="categoryForm">
+                    <div class="row g-3">
+                      <div class="col-md-3">
+                        <label class="form-label" for="categoryName">Nombre</label>
+                        <input type="text" id="categoryName" class="form-control" placeholder="Ej: Comida" required />
+                      </div>
+                      <div class="col-md-2">
+                        <label class="form-label" for="categoryType">Tipo</label>
+                        <select id="categoryType" class="form-select" required>
+                          <option value="EXPENSE">Gasto</option>
+                          <option value="INCOME">Ingreso</option>
+                        </select>
+                      </div>
+                      <div class="col-md-3">
+                        <label class="form-label" for="categoryParent">Categoría padre</label>
+                        <select id="categoryParent" class="form-select">
+                          <option value="">(Ninguno — es raíz)</option>
+                        </select>
+                      </div>
+                      <div class="col-md-2">
+                        <label class="form-label" for="categoryColor">Color</label>
+                        <input type="color" id="categoryColor" class="form-control form-control-color" value="#36a2eb" />
+                      </div>
+                    </div>
+                    <div class="row g-2 mt-3">
+                      <div class="col-md-3">
+                        <button type="submit" id="saveCategoryBtn" class="btn btn-primary w-100">Guardar Categoría</button>
+                      </div>
+                      <div class="col-md-3">
+                        <button type="button" id="cancelCategoryEditBtn" class="btn btn-outline-secondary w-100 d-none">Cancelar</button>
+                      </div>
+                    </div>
+                  </form>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Category List -->
+          <div class="row d-none" id="categoryListRow">
+            <div class="col-12">
+              <div class="card">
+                <div class="card-header">Tus Categorías</div>
+                <div class="card-body">
+                  <div id="categoryListContainer">
+                    <p class="text-muted mb-0">Cargando categorías...</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
           <!-- Charts -->
           <div class="row">
             <div class="col-md-4">
@@ -313,21 +392,6 @@
                       <label for="filterCategoria">Categoría</label>
                       <select id="filterCategoria" class="form-select">
                         <option value="todas">Todas</option>
-                        <optgroup label="Gastos">
-                          <option value="alimentacion">Alimentación</option>
-                          <option value="transporte">Transporte</option>
-                          <option value="entretenimiento">Entretenimiento</option>
-                          <option value="salud">Salud</option>
-                          <option value="housing">Vivienda</option>
-                          <option value="utilities">Servicios</option>
-                          <option value="otros-gasto">Otros (gasto)</option>
-                        </optgroup>
-                        <optgroup label="Ingresos">
-                          <option value="sueldo">Sueldo</option>
-                          <option value="freelance">Freelance</option>
-                          <option value="inversiones">Inversiones</option>
-                          <option value="otros-ingreso">Otros (ingreso)</option>
-                        </optgroup>
                       </select>
                     </div>
                     <div class="col-md-3">
@@ -411,13 +475,7 @@
                       <div class="col-md-2">
                         <label class="form-label" for="categoria">Categoría</label>
                         <select id="categoria" class="form-select" required>
-                          <option value="alimentacion">Alimentación</option>
-                          <option value="transporte">Transporte</option>
-                          <option value="entretenimiento">Entretenimiento</option>
-                          <option value="salud">Salud</option>
-                          <option value="housing">Vivienda</option>
-                          <option value="utilities">Servicios</option>
-                          <option value="otros-gasto">Otros</option>
+                          <option value="">Cargando...</option>
                         </select>
                       </div>
                       <div class="col-md-2">
@@ -563,13 +621,7 @@
                       <div class="col-md-3">
                         <label class="form-label" for="budgetCategory">Categoría</label>
                         <select id="budgetCategory" class="form-select" required>
-                          <option value="alimentacion">Alimentación</option>
-                          <option value="transporte">Transporte</option>
-                          <option value="entretenimiento">Entretenimiento</option>
-                          <option value="salud">Salud</option>
-                          <option value="housing">Vivienda</option>
-                          <option value="utilities">Servicios</option>
-                          <option value="otros-gasto">Otros</option>
+                          <option value="">Cargando...</option>
                         </select>
                       </div>
                       <div class="col-md-3">

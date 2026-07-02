@@ -3,6 +3,13 @@ import cors from "cors";
 import helmet from "helmet";
 import rateLimit from "express-rate-limit";
 import dotenv from "dotenv";
+import path from "path";
+import { fileURLToPath } from "url";
+import passport from "passport";
+import "./config/passport.js"; // Initialize Passport strategies
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const FRONTEND_PATH = path.join(__dirname, "..", "..");
 
 // Load environment variables
 dotenv.config();
@@ -14,6 +21,7 @@ import transactionRoutes from "./routes/transactions.js";
 import budgetRoutes from "./routes/budgets.js";
 import dashboardRoutes from "./routes/dashboard.js";
 import familyRoutes from "./routes/family.js";
+import categoryRoutes from "./routes/categories.js";
 
 // Import middleware
 import { errorHandler } from "./middleware/errorHandler.js";
@@ -26,8 +34,42 @@ const PORT = process.env.PORT || 3000;
 // SECURITY MIDDLEWARE
 // ============================================================
 
-// Helmet - Security headers
-app.use(helmet());
+// Helmet - Security headers (configurado para permitir CDN)
+app.use(
+  helmet({
+    contentSecurityPolicy: {
+      directives: {
+        defaultSrc: ["'self'"],
+        scriptSrc: [
+          "'self'",
+          "'unsafe-inline'",
+          "https://cdn.jsdelivr.net",
+          "https://accounts.google.com",
+          "https://appleid.cdn-apple.com",
+        ],
+        styleSrc: [
+          "'self'",
+          "'unsafe-inline'",
+          "https://cdn.jsdelivr.net",
+          "https://accounts.google.com",
+          "https://appleid.cdn-apple.com",
+        ],
+        imgSrc: ["'self'", "data:"],
+        connectSrc: [
+          "'self'",
+          "https://accounts.google.com",
+          "https://appleid.apple.com",
+        ],
+        fontSrc: ["'self'", "https://cdn.jsdelivr.net"],
+        frameSrc: [
+          "'self'",
+          "https://accounts.google.com",
+          "https://appleid.apple.com",
+        ],
+      },
+    },
+  })
+);
 
 // CORS
 app.use(
@@ -61,6 +103,18 @@ app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true }));
 
 // ============================================================
+// PASSPORT INITIALIZATION (Stateless OAuth)
+// ============================================================
+
+app.use(passport.initialize());
+
+// ============================================================
+// STATIC FILES (Frontend)
+// ============================================================
+
+app.use(express.static(FRONTEND_PATH));
+
+// ============================================================
 // ROUTES
 // ============================================================
 
@@ -76,6 +130,7 @@ app.use("/api/transactions", authenticate, transactionRoutes);
 app.use("/api/budgets", authenticate, budgetRoutes);
 app.use("/api/dashboard", authenticate, dashboardRoutes);
 app.use("/api/family", authenticate, familyRoutes);
+app.use("/api/categories", authenticate, categoryRoutes);
 
 // 404 handler
 app.use((req, res) => {

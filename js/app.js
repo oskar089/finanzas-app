@@ -22,7 +22,7 @@ const form = document.getElementById("addMovementForm");
 const conceptoInput = document.getElementById("concepto");
 const montoInput = document.getElementById("monto");
 const tipoSelect = document.getElementById("tipo");
-const categoriaSelect = document.getElementById("categoria");
+const categoriaInput = document.getElementById("categoria");
 const fechaInput = document.getElementById("fecha");
 const movimientosBody = document.getElementById("movimientosTableBody");
 const balanceSpan = document.getElementById("totalBalance");
@@ -47,42 +47,9 @@ const prevPageBtn = document.getElementById("prevPageBtn");
 const nextPageBtn = document.getElementById("nextPageBtn");
 
 // ============================================================
-// CATEGORIES
+// CATEGORIES - el usuario ingresa la categoria como texto libre.
+// No hay lista fija ni validacion contra set predefinido.
 // ============================================================
-
-const CATEGORIAS_GASTO = {
-  alimentacion: "Alimentación",
-  transporte: "Transporte",
-  entretenimiento: "Entretenimiento",
-  salud: "Salud",
-  housing: "Vivienda",
-  utilities: "Servicios",
-  "otros-gasto": "Otros",
-};
-
-const CATEGORIAS_INGRESO = {
-  sueldo: "Sueldo",
-  freelance: "Freelance",
-  inversiones: "Inversiones",
-  "otros-ingreso": "Otros",
-};
-
-function getCategoriasPorTipo(tipo) {
-  return tipo === "ingreso" ? CATEGORIAS_INGRESO : CATEGORIAS_GASTO;
-}
-
-function poblarCategorias(tipo, valorPreseleccionado = null) {
-  const categorias = getCategoriasPorTipo(tipo);
-  categoriaSelect.innerHTML = Object.entries(categorias)
-    .map(([valor, etiqueta]) => `<option value="${valor}">${etiqueta}</option>`)
-    .join("");
-  if (valorPreseleccionado && categorias[valorPreseleccionado]) {
-    categoriaSelect.value = valorPreseleccionado;
-  }
-}
-
-tipoSelect.addEventListener("change", (e) => poblarCategorias(e.target.value));
-poblarCategorias(tipoSelect.value);
 
 // ============================================================
 // STATE

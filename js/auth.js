@@ -94,16 +94,29 @@ authForm.addEventListener("submit", async (e) => {
 });
 
 // ============================================================
-// SOCIAL OAUTH BUTTONS
+// SOCIAL OAUTH BUTTONS — show only if backend has OAuth configured
 // ============================================================
 
-btnGoogleLogin.addEventListener("click", () => {
-  loginWithGoogle();
-});
+const socialAuthSection = document.getElementById("socialAuthSection");
 
-btnAppleLogin.addEventListener("click", () => {
-  loginWithApple();
-});
+async function detectOAuthProviders() {
+  try {
+    const res = await fetch("/api/auth/google", {
+      method: "HEAD",
+      redirect: "manual",
+    });
+    // 302/303 = OAuth redirect started → configured. 501 = not configured.
+    if (res.status !== 501) {
+      socialAuthSection.classList.remove("d-none");
+      btnGoogleLogin.addEventListener("click", () => loginWithGoogle());
+      btnAppleLogin.addEventListener("click", () => loginWithApple());
+    }
+  } catch {
+    // Server unreachable — keep hidden
+  }
+}
+
+detectOAuthProviders();
 
 // ============================================================
 // LOGOUT

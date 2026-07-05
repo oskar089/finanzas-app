@@ -267,6 +267,101 @@ body {
   text-decoration: underline;
 }
 
+/* ============================================================
+   SOCIAL AUTH BUTTONS
+   ============================================================ */
+
+.social-auth-buttons {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 1.5rem;
+  margin-bottom: 1rem;
+}
+
+.social-btn {
+  width: 100%;
+  padding: 12px 16px;
+  border: 2px solid #e5e7eb;
+  border-radius: 12px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  transition: all 0.2s ease;
+  background: white;
+  color: #374151;
+}
+
+.social-btn i {
+  font-size: 1.2rem;
+}
+
+.social-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.social-btn:active {
+  transform: translateY(0);
+}
+
+.google-btn:hover {
+  border-color: #4285f4;
+  background: #f8fbff;
+}
+
+.apple-btn:hover {
+  border-color: #000;
+  background: #fafafa;
+}
+
+.social-divider {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 4px 0;
+  color: #9ca3af;
+  font-size: 0.8rem;
+  font-weight: 500;
+}
+
+.social-divider::before,
+.social-divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: #e5e7eb;
+}
+
+body.dark-mode .social-btn {
+  background: #1a1a2e;
+  border-color: #2a2a4a;
+  color: #e0e0e0;
+}
+
+body.dark-mode .google-btn:hover {
+  border-color: #4285f4;
+  background: #1a1a3e;
+}
+
+body.dark-mode .apple-btn:hover {
+  border-color: #fff;
+  background: #2a2a4a;
+}
+
+body.dark-mode .social-divider {
+  color: #6b7280;
+}
+
+body.dark-mode .social-divider::before,
+body.dark-mode .social-divider::after {
+  background: #2a2a4a;
+}
+
 /* Error Message */
 .auth-error {
   color: #ef4444;
@@ -347,11 +442,17 @@ header p {
   font-size: 0.95rem;
 }
 
-.dark-mode-toggle {
+.header-actions {
   position: fixed;
   top: 1rem;
   right: 1rem;
   z-index: 1000;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.dark-mode-toggle {
   width: 40px;
   height: 40px;
   border-radius: 50%;
@@ -371,6 +472,25 @@ header p {
   background: rgba(255, 255, 255, 0.2);
   border-color: rgba(255, 255, 255, 0.5);
   transform: scale(1.1);
+}
+
+.btn-logout-top {
+  padding: 8px 16px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--white);
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  white-space: nowrap;
+}
+
+.btn-logout-top:hover {
+  background: rgba(255, 64, 108, 0.3);
+  border-color: rgba(255, 100, 100, 0.5);
+  transform: scale(1.05);
 }
 
 .card {
@@ -635,14 +755,25 @@ body.dark-mode footer {
   color: rgba(255, 255, 255, 0.4);
 }
 
-body.dark-mode .dark-mode-toggle {
+body.dark-mode .header-actions .dark-mode-toggle {
   border-color: rgba(255, 255, 255, 0.15);
   background: rgba(255, 255, 255, 0.04);
 }
 
-body.dark-mode .dark-mode-toggle:hover {
+body.dark-mode .header-actions .dark-mode-toggle:hover {
   background: rgba(255, 255, 255, 0.12);
   border-color: rgba(255, 255, 255, 0.35);
+}
+
+body.dark-mode .btn-logout-top {
+  border-color: rgba(255, 255, 255, 0.15);
+  background: rgba(255, 255, 255, 0.04);
+  color: #e0e0e0;
+}
+
+body.dark-mode .btn-logout-top:hover {
+  background: rgba(255, 64, 108, 0.25);
+  border-color: rgba(255, 100, 100, 0.35);
 }
 
 body.dark-mode .confirm-box {

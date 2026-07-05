@@ -210,6 +210,21 @@ function handleOAuthCallback(provider) {
 }
 
 // ============================================================
+// OAuth Strategy Guard Middleware
+// ============================================================
+
+function requireOAuthStrategy(strategyName) {
+  return (req, res, next) => {
+    if (passport._strategy(strategyName)) {
+      return next();
+    }
+    res.status(501).json({
+      error: `OAuth provider "${strategyName}" is not configured. Set the required environment variables to enable it.`,
+    });
+  };
+}
+
+// ============================================================
 // Google OAuth Routes
 // ============================================================
 
@@ -219,6 +234,7 @@ function handleOAuthCallback(provider) {
  */
 router.get(
   "/google",
+  requireOAuthStrategy("google"),
   passport.authenticate("google", {
     scope: ["profile", "email"],
     session: false,
@@ -229,7 +245,11 @@ router.get(
  * GET /api/auth/google/callback
  * Google OAuth callback — link/find/create user, generate JWT, redirect
  */
-router.get("/google/callback", handleOAuthCallback("google"));
+router.get(
+  "/google/callback",
+  requireOAuthStrategy("google"),
+  handleOAuthCallback("google")
+);
 
 // ============================================================
 // Apple OAuth Routes
@@ -241,6 +261,7 @@ router.get("/google/callback", handleOAuthCallback("google"));
  */
 router.get(
   "/apple",
+  requireOAuthStrategy("apple"),
   passport.authenticate("apple", {
     session: false,
   })
@@ -250,7 +271,11 @@ router.get(
  * GET /api/auth/apple/callback
  * Apple OAuth callback — link/find/create user, generate JWT, redirect
  */
-router.get("/apple/callback", handleOAuthCallback("apple"));
+router.get(
+  "/apple/callback",
+  requireOAuthStrategy("apple"),
+  handleOAuthCallback("apple")
+);
 
 /**
  * POST /api/auth/login

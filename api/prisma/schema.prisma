@@ -27,6 +27,7 @@ model User {
   accounts      Account[]
   transactions  Transaction[]
   budgets       Budget[]
+  categories    Category[]
   familyMembers FamilyMember[]
   familyAdmin   FamilyGroup[]  @relation("FamilyAdmin")
 
@@ -54,6 +55,37 @@ model Account {
 
   @@index([userId])
   @@map("accounts")
+}
+
+// ============================================================
+// CATEGORY MANAGEMENT
+// ============================================================
+
+model Category {
+  id        String         @id @default(uuid())
+  userId    String         @map("user_id")
+  name      String
+  type      CategoryType
+  parentId  String?        @map("parent_id")
+  color     String?
+  sortOrder Int            @default(0) @map("sort_order")
+  isActive  Boolean        @default(true) @map("is_active")
+  createdAt DateTime       @default(now()) @map("created_at")
+  updatedAt DateTime       @updatedAt @map("updated_at")
+
+  // Relations
+  user   User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  parent Category? @relation("CategoryParent", fields: [parentId], references: [id])
+  children Category[] @relation("CategoryParent")
+
+  @@unique([userId, name])
+  @@index([userId, type])
+  @@map("categories")
+}
+
+enum CategoryType {
+  INCOME
+  EXPENSE
 }
 
 enum AccountType {

@@ -86,7 +86,7 @@ export const createTransactionSchema = z.object({
   categoryId: z.string().uuid("Invalid category ID").optional().nullable(),
   description: z.string().min(1, "Description is required"),
   notes: z.string().optional(),
-  date: z.string().datetime("Invalid date format").or(z.date()),
+  date: z.string().datetime("Invalid date format").or(z.string().date()),
 });
 
 export const updateTransactionSchema = z.object({
@@ -97,7 +97,7 @@ export const updateTransactionSchema = z.object({
   categoryId: z.string().uuid().optional().nullable(),
   description: z.string().min(1).optional(),
   notes: z.string().optional(),
-  date: z.string().datetime().or(z.date()).optional(),
+  date: z.string().datetime().or(z.string().date()).or(z.date()).optional(),
 });
 
 export const transactionQuerySchema = z.object({

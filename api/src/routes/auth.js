@@ -134,7 +134,16 @@ async function findOrCreateOAuthUser({ provider, providerId, email, name }) {
   }
 
   // 4. Create new user + seed default categories atomically
+  // NOTE: If no email is provided by the OAuth provider, a synthetic email is used.
+  // This means the user won't be able to receive email notifications or reset a password.
+  // A future enhancement should prompt the user to set an email after first OAuth login.
   const uniqueEmail = email || `${providerId}@${provider}.local`;
+  if (!email) {
+    console.warn(
+      `⚠️  OAuth user created with synthetic email: ${uniqueEmail}. ` +
+      "Consider prompting for email verification.",
+    );
+  }
 
   const result = await prisma.$transaction(async (tx) => {
     const user = await tx.user.create({

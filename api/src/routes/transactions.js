@@ -10,6 +10,17 @@ import { ApiError } from "../middleware/errorHandler.js";
 const router = Router();
 
 /**
+ * Calculate the balance effect of a transaction on its account.
+ * INCOME → adds to balance; EXPENSE → subtracts; TRANSFER → no net effect
+ * (dual-entry support requires a toAccountId field for proper transfer handling).
+ */
+function getBalanceEffect(type, amount) {
+  if (type === "INCOME") return Number(amount);
+  if (type === "TRANSFER") return 0;
+  return -Number(amount);
+}
+
+/**
  * GET /api/transactions
  * Get all transactions for current user with filtering and pagination
  */
@@ -136,10 +147,7 @@ router.post("/", async (req, res, next) => {
         where: { id: validatedData.accountId },
         data: {
           balance: {
-            increment:
-              validatedData.type === "INCOME"
-                ? validatedData.amount
-                : -validatedData.amount,
+            increment: getBalanceEffect(validatedData.type, validatedData.amount),
           },
         },
       }),
@@ -172,10 +180,10 @@ router.put("/:id", async (req, res, next) => {
     const validatedData = updateTransactionSchema.parse(req.body);
 
     // Compute the old transaction's balance effect
-    const oldEffect =
-      existingTransaction.type === "INCOME"
-        ? Number(existingTransaction.amount)
-        : -Number(existingTransaction.amount);
+    const oldEffect = getBalanceEffect(
+      existingTransaction.type,
+      existingTransaction.amount,
+    );
 
     // Determine effective new values (fall back to existing when not provided)
     const newType = validatedData.type || existingTransaction.type;
@@ -183,7 +191,7 @@ router.put("/:id", async (req, res, next) => {
       validatedData.amount !== undefined
         ? Number(validatedData.amount)
         : Number(existingTransaction.amount);
-    const newEffect = newType === "INCOME" ? newAmount : -newAmount;
+    const newEffect = getBalanceEffect(newType, newAmount);
 
     const accountChanged =
       validatedData.accountId &&
@@ -248,11 +256,11 @@ router.delete("/:id", async (req, res, next) => {
       throw new ApiError(404, "Transaction not found");
     }
 
-    // Calculate balance reversal
-    const balanceReversal =
-      existingTransaction.type === "INCOME"
-        ? -Number(existingTransaction.amount)
-        : Number(existingTransaction.amount);
+    // Calculate balance reversal (reverse the original effect)
+    const balanceReversal = -getBalanceEffect(
+      existingTransaction.type,
+      existingTransaction.amount,
+    );
 
     // Delete transaction and reverse balance
     await prisma.$transaction([
@@ -309,7 +317,7 @@ router.post("/bulk", async (req, res, next) => {
           where: { id: t.accountId },
           data: {
             balance: {
-              increment: t.type === "INCOME" ? t.amount : -t.amount,
+              increment: getBalanceEffect(t.type, t.amount),
             },
           },
         });

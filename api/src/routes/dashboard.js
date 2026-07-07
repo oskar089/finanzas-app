@@ -89,7 +89,11 @@ router.get("/", async (req, res, next) => {
       .reduce((acc, t) => {
         const date = t.date.toISOString().split("T")[0];
         const delta =
-          t.type === "INCOME" ? Number(t.amount) : -Number(t.amount);
+          t.type === "INCOME"
+            ? Number(t.amount)
+            : t.type === "TRANSFER"
+              ? 0
+              : -Number(t.amount);
 
         const lastBalance =
           acc.length > 0 ? acc[acc.length - 1].balance : totalBalance - netIncome;

@@ -4,7 +4,9 @@ import {
   updateBudget,
   deleteBudget,
   copyBudgets,
+  getCategories,
 } from "./api.js";
+import { escapeHTML, showToast, showConfirm, formatCurrency } from "./shared.js";
 
 // ============================================================
 // EXPENSE CATEGORIES (solo gastos, budgets no aplican a ingresos)
@@ -19,6 +21,35 @@ const CATEGORIAS_GASTO = {
   utilities: "Servicios",
   "otros-gasto": "Otros",
 };
+
+// ============================================================
+// POPULATE BUDGET CATEGORY SELECT
+// ============================================================
+
+export function poblarBudgetCategorias(categorias) {
+  if (!budgetCategory) return;
+  const expenses = categorias.filter((c) => c.type === "EXPENSE");
+  if (expenses.length > 0) {
+    budgetCategory.innerHTML =
+      '<option value="">Seleccionar categoría</option>' +
+      expenses
+        .map(
+          (c) =>
+            `<option value="${escapeHTML(c.name)}">${escapeHTML(c.name)}</option>`,
+        )
+        .join("");
+  } else {
+    // Fallback: categorías hardcodeadas si no hay en DB
+    budgetCategory.innerHTML =
+      '<option value="">Seleccionar categoría</option>' +
+      Object.entries(CATEGORIAS_GASTO)
+        .map(
+          ([key, label]) =>
+            `<option value="${escapeHTML(key)}">${escapeHTML(label)}</option>`,
+        )
+        .join("");
+  }
+}
 
 // ============================================================
 // DOM ELEMENTS
@@ -41,72 +72,6 @@ const btnCopyBudgets = document.getElementById("btnCopyBudgets");
 
 let budgets = [];
 let editingBudgetId = null;
-
-// ============================================================
-// UTILITY FUNCTIONS (matching app.js pattern)
-// ============================================================
-
-function escapeHTML(str) {
-  return String(str ?? "")
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#39;");
-}
-
-function showToast(mensaje, tipo = "success") {
-  const container = document.getElementById("toastContainer");
-  const toast = document.createElement("div");
-  toast.className = `app-toast app-toast-${tipo}`;
-  toast.textContent = mensaje;
-  container.appendChild(toast);
-
-  requestAnimationFrame(() => toast.classList.add("show"));
-  setTimeout(() => {
-    toast.classList.remove("show");
-    toast.addEventListener("transitionend", () => toast.remove(), {
-      once: true,
-    });
-  }, 3500);
-}
-
-function showConfirm(mensaje) {
-  return new Promise((resolve) => {
-    const overlay = document.getElementById("confirmOverlay");
-    const messageEl = document.getElementById("confirmMessage");
-    const acceptBtn = document.getElementById("confirmAcceptBtn");
-    const cancelBtn = document.getElementById("confirmCancelBtn");
-
-    messageEl.textContent = mensaje;
-    overlay.classList.remove("d-none");
-
-    const cleanup = (resultado) => {
-      overlay.classList.add("d-none");
-      acceptBtn.removeEventListener("click", onAccept);
-      cancelBtn.removeEventListener("click", onCancel);
-      overlay.removeEventListener("click", onOverlayClick);
-      resolve(resultado);
-    };
-
-    const onAccept = () => cleanup(true);
-    const onCancel = () => cleanup(false);
-    const onOverlayClick = (e) => {
-      if (e.target === overlay) cleanup(false);
-    };
-
-    acceptBtn.addEventListener("click", onAccept);
-    cancelBtn.addEventListener("click", onCancel);
-    overlay.addEventListener("click", onOverlayClick);
-  });
-}
-
-function formatCurrency(amount) {
-  return new Intl.NumberFormat("es-AR", {
-    style: "currency",
-    currency: "ARS",
-  }).format(amount);
-}
 
 function getEtiquetaCategoria(categoria) {
   return CATEGORIAS_GASTO[categoria] || categoria;

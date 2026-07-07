@@ -10,8 +10,13 @@ import {
   deleteAccount,
   getDashboard,
   getDashboardMonthly,
+  getCategories,
+  createCategory,
+  updateCategory,
+  deleteCategory,
 } from "./api.js";
-import { loadBudgets } from "./budgets.js";
+import { escapeHTML, showToast, showConfirm, formatCurrency } from "./shared.js";
+import { loadBudgets, poblarBudgetCategorias } from "./budgets.js";
 import { loadGroups } from "./family.js";
 
 // ============================================================
@@ -46,10 +51,7 @@ const pageIndicator = document.getElementById("pageIndicator");
 const prevPageBtn = document.getElementById("prevPageBtn");
 const nextPageBtn = document.getElementById("nextPageBtn");
 
-// ============================================================
-// CATEGORIES - el usuario ingresa la categoria como texto libre.
-// No hay lista fija ni validacion contra set predefinido.
-// ============================================================
+const filterCategoriaSelect = document.getElementById("filterCategoria");
 
 // ============================================================
 // STATE
@@ -57,6 +59,7 @@ const nextPageBtn = document.getElementById("nextPageBtn");
 
 let movimientos = [];
 let cuentas = [];
+let categorias = [];
 let sortColumn = "date";
 let sortDirection = "desc";
 let filterTipo = "todos";
@@ -76,69 +79,6 @@ let editandoCuentaId = null;
 let currentPage = 1;
 let pageSize = 20;
 let pagination = null;
-
-// ============================================================
-// TOAST & CONFIRM
-// ============================================================
-
-function showToast(mensaje, tipo = "success") {
-  const container = document.getElementById("toastContainer");
-  const toast = document.createElement("div");
-  toast.className = `app-toast app-toast-${tipo}`;
-  toast.textContent = mensaje;
-  container.appendChild(toast);
-
-  requestAnimationFrame(() => toast.classList.add("show"));
-  setTimeout(() => {
-    toast.classList.remove("show");
-    toast.addEventListener("transitionend", () => toast.remove(), {
-      once: true,
-    });
-  }, 3500);
-}
-
-function showConfirm(mensaje) {
-  return new Promise((resolve) => {
-    const overlay = document.getElementById("confirmOverlay");
-    const messageEl = document.getElementById("confirmMessage");
-    const acceptBtn = document.getElementById("confirmAcceptBtn");
-    const cancelBtn = document.getElementById("confirmCancelBtn");
-
-    messageEl.textContent = mensaje;
-    overlay.classList.remove("d-none");
-
-    const cleanup = (resultado) => {
-      overlay.classList.add("d-none");
-      acceptBtn.removeEventListener("click", onAccept);
-      cancelBtn.removeEventListener("click", onCancel);
-      overlay.removeEventListener("click", onOverlayClick);
-      resolve(resultado);
-    };
-
-    const onAccept = () => cleanup(true);
-    const onCancel = () => cleanup(false);
-    const onOverlayClick = (e) => {
-      if (e.target === overlay) cleanup(false);
-    };
-
-    acceptBtn.addEventListener("click", onAccept);
-    cancelBtn.addEventListener("click", onCancel);
-    overlay.addEventListener("click", onOverlayClick);
-  });
-}
-
-// ============================================================
-// ESCAPE HTML
-// ============================================================
-
-function escapeHTML(str) {
-  return String(str ?? "")
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#39;");
-}
 
 // ============================================================
 // LOAD DATA FROM API
@@ -185,12 +125,73 @@ async function loadMovimientos() {
     renderPagination();
     actualizarBalance();
     actualizarChartGastos();
-    actualizarChartEvolucion();
     actualizarChartMensual();
   } catch (err) {
     console.error("Error loading transactions:", err);
     showToast("Error al cargar movimientos", "danger");
   }
+}
+
+async function loadCategorias(tipo) {
+  try {
+    const params = {};
+    if (tipo) params.type = tipo.toUpperCase();
+    const data = await getCategories(params);
+    categorias = data.categories || [];
+    poblarCategoriaFilter();
+  } catch (err) {
+    console.error("Error loading categories:", err);
+  }
+}
+
+function getCategoriasPorTipo(tipo) {
+  const tipoUpper = tipo === "ingreso" ? "INCOME" : "EXPENSE";
+  return categorias
+    .filter((c) => c.type === tipoUpper)
+    .reduce((acc, c) => {
+      acc[c.name] = c.name;
+      return acc;
+    }, {});
+}
+
+function poblarCategorias(tipo, categoriaSeleccionada) {
+  const datalist = document.getElementById("categoriaSuggestions");
+  if (!datalist) return;
+  const tipoUpper = tipo === "ingreso" ? "INCOME" : "EXPENSE";
+  datalist.innerHTML = categorias
+    .filter((c) => c.type === tipoUpper)
+    .map((c) => `<option value="${escapeHTML(c.name)}">`)
+    .join("");
+  if (categoriaSeleccionada) {
+    categoriaInput.value = categoriaSeleccionada;
+  }
+}
+
+function poblarCategoriaFilter() {
+  if (!filterCategoriaSelect) return;
+
+  // Categorías únicas desde los movimientos cargados
+  const desdeMovimientos = [
+    ...new Set(
+      movimientos
+        .map((m) => m.category || m.categoria)
+        .filter(Boolean),
+    ),
+  ];
+
+  // Fusionar DB + movimientos, deduplicar
+  const todas = [
+    ...new Set([
+      ...categorias.map((c) => c.name),
+      ...desdeMovimientos,
+    ]),
+  ];
+
+  filterCategoriaSelect.innerHTML =
+    '<option value="todas">Todas</option>' +
+    todas
+      .map((c) => `<option value="${escapeHTML(c)}">${escapeHTML(c)}</option>`)
+      .join("");
 }
 
 function renderPagination() {
@@ -210,17 +211,21 @@ function renderPagination() {
 // RENDER
 // ============================================================
 
-function getEtiquetaCategoria(categoria) {
-  return (
-    CATEGORIAS_GASTO[categoria] || CATEGORIAS_INGRESO[categoria] || categoria
-  );
+function truncarTexto(texto, max = 60) {
+  if (!texto) return "";
+  if (texto.length <= max) return texto;
+  return texto.substring(0, max) + "...";
 }
 
-function formatCurrency(amount) {
-  return new Intl.NumberFormat("es-AR", {
-    style: "currency",
-    currency: "ARS",
-  }).format(amount);
+function getEtiquetaCategoria(categoria) {
+  if (!categoria) return "";
+  const found = categorias.find((c) => c.name === categoria);
+  return found ? found.name : categoria;
+}
+
+function formatearTipo(tipo) {
+  const t = (tipo || "").toLowerCase();
+  return t === "income" || t === "ingreso" ? "Ingreso" : "Gasto";
 }
 
 function renderMovimientos() {
@@ -240,10 +245,10 @@ function renderMovimientos() {
       (m) => `
       <tr>
         <td>${escapeHTML(m.date?.split("T")[0] || m.fecha)}</td>
-        <td>${escapeHTML(m.description || m.concepto)}</td>
-        <td>${escapeHTML((m.type || m.tipo)?.toLowerCase())}</td>
-        <td>${escapeHTML(getEtiquetaCategoria(m.category || m.categoria))}</td>
-        <td>${formatCurrency(m.amount || m.monto)}</td>
+        <td>${escapeHTML(truncarTexto(m.description || m.concepto))}</td>
+        <td><span class="type-badge type-${(m.type || m.tipo || '').toLowerCase() === 'income' || (m.type || m.tipo || '').toLowerCase() === 'ingreso' ? 'income' : 'expense'}">${formatearTipo(m.type || m.tipo)}</span></td>
+        <td><span class="category-pill">${escapeHTML(getEtiquetaCategoria(m.category || m.categoria))}</span></td>
+        <td class="text-end amount-cell ${(m.type || m.tipo || '').toLowerCase() === 'income' || (m.type || m.tipo || '').toLowerCase() === 'ingreso' ? 'amount-income' : 'amount-expense'}">${formatCurrency(m.amount || m.monto)}</td>
         <td>
           <button class="btn-editar" data-id="${escapeHTML(m.id)}">Editar</button>
           <button class="btn-eliminar" data-id="${escapeHTML(m.id)}">Eliminar</button>
@@ -314,6 +319,11 @@ function cancelarEdicion() {
 }
 
 btnCancelEdit.addEventListener("click", cancelarEdicion);
+
+// Update category suggestions when movement type changes
+tipoSelect.addEventListener("change", () => {
+  poblarCategorias(tipoSelect.value);
+});
 
 // ============================================================
 // ACCOUNT CRUD
@@ -412,7 +422,7 @@ form.addEventListener("submit", async (e) => {
   const monto = Number(montoTexto.replace(",", "."));
   const fecha = fechaInput.value;
   const tipo = tipoSelect.value;
-  const categoria = categoriaSelect.value;
+  const categoria = categoriaInput.value;
 
   if (!concepto) {
     showToast("El concepto no puede estar vacío.", "warning");
@@ -427,13 +437,17 @@ form.addEventListener("submit", async (e) => {
     return;
   }
 
+  // Auto-create category if it doesn't exist
   const categoriasDelTipo = Object.keys(getCategoriasPorTipo(tipo));
   if (!categoriasDelTipo.includes(categoria)) {
-    showToast(
-      "Seleccioná una categoría válida para este tipo de movimiento.",
-      "warning",
-    );
-    return;
+    const tipoUpper = tipo === "ingreso" ? "INCOME" : "EXPENSE";
+    try {
+      await createCategory({ name: categoria, type: tipoUpper });
+      await loadCategorias();
+    } catch (err) {
+      showToast(`No se pudo crear la categoría "${categoria}".`, "warning");
+      return;
+    }
   }
 
   const transactionData = {
@@ -495,8 +509,7 @@ movimientosBody.addEventListener("click", async (e) => {
     const movimiento = movimientos.find((m) => m.id === id);
     if (!movimiento) return;
 
-    let label = movimiento.description || movimiento.concepto;
-    if (label.length > 60) label = label.substring(0, 60) + "...";
+    let label = truncarTexto(movimiento.description || movimiento.concepto, 60);
 
     const confirmado = await showConfirm(`¿Eliminar movimiento "${label}"?`);
     if (!confirmado) return;
@@ -561,23 +574,31 @@ accountsTableBody.addEventListener("click", async (e) => {
 // PAGINATION
 // ============================================================
 
-prevPageBtn.querySelector("button").addEventListener("click", () => {
-  if (pagination && pagination.page > 1) {
-    currentPage = pagination.page - 1;
-    loadMovimientos();
-  }
-});
+const prevBtn = prevPageBtn?.querySelector("button");
+if (prevBtn) {
+  prevBtn.addEventListener("click", () => {
+    if (pagination && pagination.page > 1) {
+      currentPage = pagination.page - 1;
+      loadMovimientos();
+    }
+  });
+}
 
-nextPageBtn.querySelector("button").addEventListener("click", () => {
-  if (pagination && pagination.page < pagination.totalPages) {
-    currentPage = pagination.page + 1;
-    loadMovimientos();
-  }
-});
+const nextBtn = nextPageBtn?.querySelector("button");
+if (nextBtn) {
+  nextBtn.addEventListener("click", () => {
+    if (pagination && pagination.page < pagination.totalPages) {
+      currentPage = pagination.page + 1;
+      loadMovimientos();
+    }
+  });
+}
 
 // ============================================================
 // FILTERS
 // ============================================================
+
+let filterDebounceTimer = null;
 
 function aplicarFiltros() {
   currentPage = 1;
@@ -611,7 +632,8 @@ document.getElementById("filterMontoMax").addEventListener("input", (e) => {
 
 document.getElementById("filterConcepto").addEventListener("input", (e) => {
   filterConcepto = e.target.value;
-  aplicarFiltros();
+  clearTimeout(filterDebounceTimer);
+  filterDebounceTimer = setTimeout(aplicarFiltros, 300);
 });
 
 document.getElementById("filterCategoria").addEventListener("change", (e) => {
@@ -637,8 +659,9 @@ document.querySelector("thead").addEventListener("click", (e) => {
     monto: "amount",
   };
 
+  const previousSortColumn = sortColumn;
   sortColumn = columnMap[column] || column;
-  if (sortColumn === column) {
+  if (sortColumn === previousSortColumn) {
     sortDirection = sortDirection === "asc" ? "desc" : "asc";
   } else {
     sortDirection = "asc";
@@ -662,12 +685,6 @@ document.getElementById("btnDarkMode").addEventListener("click", () => {
   if (chartGastos) {
     chartGastos.options.color = textColor;
     chartGastos.update();
-  }
-  if (chartEvolucion) {
-    chartEvolucion.options.color = textColor;
-    chartEvolucion.options.scales.x.grid.color = gridColor;
-    chartEvolucion.options.scales.y.grid.color = gridColor;
-    chartEvolucion.update();
   }
   if (chartMensual) {
     const incomeBg = oscuro
@@ -786,15 +803,6 @@ function parsearCSV(texto) {
       return acc;
     }
 
-    const categoriasValidasDelTipo = Object.keys(getCategoriasPorTipo(tipo));
-    if (!categoriasValidasDelTipo.includes(categoriaLimpia)) {
-      errores.push({
-        linea: numLinea,
-        razon: `Categoría "${categoria}" no válida para tipo "${tipo}"`,
-      });
-      return acc;
-    }
-
     const monto = Math.abs(Number(montoStr.replace(",", ".")));
     if (!monto || monto <= 0) {
       errores.push({ linea: numLinea, razon: `Monto inválido: "${montoStr}"` });
@@ -821,11 +829,10 @@ function parsearCSV(texto) {
 // ============================================================
 
 let chartGastos = null;
-let chartEvolucion = null;
 let chartMensual = null;
 
 function actualizarChartGastos() {
-  const categorias = movimientos
+  const gastosPorCategoria = movimientos
     .filter((m) => (m.type || m.tipo || "").toLowerCase() === "expense")
     .reduce(
       (acc, m) => ({
@@ -836,21 +843,25 @@ function actualizarChartGastos() {
       {},
     );
 
-  const labels = Object.keys(categorias).map(getEtiquetaCategoria);
-  const data = Object.values(categorias);
-  const colores = {
-    alimentacion: "#ff6384",
-    transporte: "#36a2eb",
-    entretenimiento: "#ffce56",
-    salud: "#4bc0c0",
-    housing: "#9966ff",
-    utilities: "#ff9f40",
-    "otros-gasto": "#c9cbcf",
-  };
+  const labels = Object.keys(gastosPorCategoria).map(getEtiquetaCategoria);
+  const data = Object.values(gastosPorCategoria);
 
-  const backgroundColor = Object.keys(categorias).map(
-    (c) => colores[c] || "#cccccc",
-  );
+  // Palette profesional — matchea el theme indigo/purple
+  const PALETTE = [
+    "#667eea", "#764ba2", "#a855f7", "#7c3aed", "#8b9aff",
+    "#6366f1", "#6d28d9", "#c084fc", "#818cf8", "#4338ca",
+  ];
+  let colorIdx = 0;
+
+  const backgroundColor = Object.keys(gastosPorCategoria).map((catName) => {
+    // Usar el color de la categoría en DB si existe
+    const dbCat = categorias.find(
+      (c) => c.name === catName || c.id === catName,
+    );
+    if (dbCat?.color) return dbCat.color;
+    // Sino, asignar del palette rotativo
+    return PALETTE[colorIdx++ % PALETTE.length];
+  });
 
   if (chartGastos) {
     chartGastos.data.labels = labels;
@@ -874,80 +885,21 @@ function actualizarChartGastos() {
     },
     options: {
       responsive: true,
-      color: "#666",
+      maintainAspectRatio: true,
+      color: document.body.classList.contains("dark-mode") ? "#c0c0c0" : "#666",
       plugins: {
-        legend: { position: "bottom" },
-      },
-    },
-  });
-}
-
-function actualizarChartEvolucion() {
-  const ordenados = [...movimientos].sort(
-    (a, b) => new Date(a.date || a.fecha) - new Date(b.date || b.fecha),
-  );
-
-  const { labels, data } = ordenados.reduce(
-    (acc, m) => {
-      const amount = m.amount || m.monto;
-      const type = (m.type || m.tipo || "").toLowerCase();
-      const delta = type === "income" || type === "ingreso" ? amount : -amount;
-      const acumulado = acc.acumulado + delta;
-      return {
-        labels: [...acc.labels, (m.date || m.fecha)?.split("T")[0]],
-        data: [...acc.data, acumulado],
-        acumulado,
-      };
-    },
-    { labels: [], data: [], acumulado: 0 },
-  );
-
-  const oscuro = document.body.classList.contains("dark-mode");
-  const textColor = oscuro ? "#e0e0e0" : "#666";
-  const gridColor = oscuro ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.1)";
-
-  if (chartEvolucion) {
-    chartEvolucion.data.labels = labels;
-    chartEvolucion.data.datasets[0].data = data;
-    chartEvolucion.options.color = textColor;
-    chartEvolucion.options.scales.x.grid.color = gridColor;
-    chartEvolucion.options.scales.y.grid.color = gridColor;
-    chartEvolucion.update();
-    return;
-  }
-
-  chartEvolucion = new Chart(document.getElementById("chartEvolucion"), {
-    type: "line",
-    data: {
-      labels,
-      datasets: [
-        {
-          label: "Balance (€)",
-          data,
-          borderColor: "#667eea",
-          backgroundColor: "rgba(102, 126, 234, 0.1)",
-          fill: true,
-          tension: 0.3,
-          pointRadius: 4,
-          pointBackgroundColor: "#667eea",
+        legend: {
+          position: "bottom",
+          labels: {
+            padding: 16,
+            usePointStyle: true,
+            pointStyle: "circle",
+            font: {
+              family: "'Segoe UI', Tahoma, sans-serif",
+              size: 12,
+            },
+          },
         },
-      ],
-    },
-    options: {
-      responsive: true,
-      color: textColor,
-      scales: {
-        x: {
-          ticks: { maxTicksLimit: 10 },
-          grid: { color: gridColor },
-        },
-        y: {
-          beginAtZero: true,
-          grid: { color: gridColor },
-        },
-      },
-      plugins: {
-        legend: { display: false },
       },
     },
   });
@@ -1013,6 +965,8 @@ function actualizarChartMensual() {
               backgroundColor: incomeBg,
               borderColor: incomeBorder,
               borderWidth: 1,
+              borderRadius: 4,
+              barPercentage: 0.65,
             },
             {
               label: "Gastos",
@@ -1020,23 +974,49 @@ function actualizarChartMensual() {
               backgroundColor: expenseBg,
               borderColor: expenseBorder,
               borderWidth: 1,
+              borderRadius: 4,
+              barPercentage: 0.65,
             },
           ],
         },
         options: {
           responsive: true,
+          maintainAspectRatio: true,
           color: textColor,
           scales: {
             x: {
-              grid: { color: gridColor },
+              grid: { color: gridColor, display: false },
+              ticks: {
+                font: {
+                  family: "'Segoe UI', Tahoma, sans-serif",
+                  size: 11,
+                },
+              },
             },
             y: {
               beginAtZero: true,
               grid: { color: gridColor },
+              ticks: {
+                font: {
+                  family: "'Segoe UI', Tahoma, sans-serif",
+                  size: 11,
+                },
+              },
             },
           },
           plugins: {
-            legend: { position: "bottom" },
+            legend: {
+              position: "bottom",
+              labels: {
+                padding: 16,
+                usePointStyle: true,
+                pointStyle: "circle",
+                font: {
+                  family: "'Segoe UI', Tahoma, sans-serif",
+                  size: 12,
+                },
+              },
+            },
           },
         },
       });
@@ -1052,7 +1032,12 @@ function actualizarChartMensual() {
 
 window.addEventListener("auth:ready", async () => {
   await loadCuentas();
+  await loadCategorias();
+  // Poblar select de categorías en presupuestos
+  poblarBudgetCategorias(categorias);
   await loadMovimientos();
   await loadBudgets();
   await loadGroups();
+  // Refrescar filtro con categorías de movimientos ya cargados
+  poblarCategoriaFilter();
 });

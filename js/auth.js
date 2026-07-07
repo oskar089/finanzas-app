@@ -100,19 +100,30 @@ authForm.addEventListener("submit", async (e) => {
 const socialAuthSection = document.getElementById("socialAuthSection");
 
 async function detectOAuthProviders() {
-  try {
-    const res = await fetch("/api/auth/google", {
-      method: "HEAD",
-      redirect: "manual",
-    });
-    // 302/303 = OAuth redirect started → configured. 501 = not configured.
-    if (res.status !== 501) {
-      socialAuthSection.classList.remove("d-none");
-      btnGoogleLogin.addEventListener("click", () => loginWithGoogle());
-      btnAppleLogin.addEventListener("click", () => loginWithApple());
+  let hasAny = false;
+
+  async function checkProvider(url, btn, loginFn) {
+    try {
+      const res = await fetch(url, { method: "HEAD", redirect: "manual" });
+      // 3xx = OAuth redirect started → configured.
+      // 501 = not configured (requireOAuthStrategy middleware).
+      // Any other status (429, 500, etc.) = treat as not available.
+      if (res.status >= 300 && res.status < 400) {
+        hasAny = true;
+        btn.addEventListener("click", loginFn);
+      }
+    } catch {
+      // Server unreachable — keep hidden
     }
-  } catch {
-    // Server unreachable — keep hidden
+  }
+
+  await Promise.all([
+    checkProvider("/api/auth/google", btnGoogleLogin, loginWithGoogle),
+    checkProvider("/api/auth/apple", btnAppleLogin, loginWithApple),
+  ]);
+
+  if (hasAny) {
+    socialAuthSection.classList.remove("d-none");
   }
 }
 

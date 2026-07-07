@@ -144,7 +144,7 @@
       </header>
 
       <main>
-        <div class="container mt-4">
+        <div class="container-fluid mt-4">
           <!-- Balance -->
           <div class="row">
             <div class="col-12">
@@ -171,12 +171,6 @@
                       class="btn btn-outline-primary"
                       type="button">
                       <i class="bi bi-gear"></i> Administrar
-                    </button>
-                    <button
-                      id="btnManageCategories"
-                      class="btn btn-outline-info"
-                      type="button">
-                      <i class="bi bi-tags"></i> Categorías
                     </button>
                   </div>
                 </div>
@@ -210,10 +204,10 @@
                           >Tipo</label
                         >
                         <select id="accountType" class="form-select" required>
-                          <option value="CHECKING">CHECKING</option>
-                          <option value="SAVINGS">SAVINGS</option>
-                          <option value="CREDIT_CARD">CREDIT_CARD</option>
-                          <option value="CASH">CASH</option>
+                          <option value="CHECKING">Cuenta Corriente</option>
+                          <option value="SAVINGS">Caja de Ahorro</option>
+                          <option value="CREDIT_CARD">Tarjeta de Crédito</option>
+                          <option value="CASH">Efectivo</option>
                         </select>
                       </div>
                       <div class="col-md-3">
@@ -287,85 +281,23 @@
             </div>
           </div>
 
-          <!-- Category Management -->
-          <div class="row d-none" id="categoryManagementRow">
-            <div class="col-12">
-              <div class="card">
-                <div class="card-header" id="categoryFormTitle">Nueva Categoría</div>
-                <div class="card-body">
-                  <form id="categoryForm">
-                    <div class="row g-3">
-                      <div class="col-md-3">
-                        <label class="form-label" for="categoryName">Nombre</label>
-                        <input type="text" id="categoryName" class="form-control" placeholder="Ej: Comida" required />
-                      </div>
-                      <div class="col-md-2">
-                        <label class="form-label" for="categoryType">Tipo</label>
-                        <select id="categoryType" class="form-select" required>
-                          <option value="EXPENSE">Gasto</option>
-                          <option value="INCOME">Ingreso</option>
-                        </select>
-                      </div>
-                      <div class="col-md-3">
-                        <label class="form-label" for="categoryParent">Categoría padre</label>
-                        <select id="categoryParent" class="form-select">
-                          <option value="">(Ninguno — es raíz)</option>
-                        </select>
-                      </div>
-                      <div class="col-md-2">
-                        <label class="form-label" for="categoryColor">Color</label>
-                        <input type="color" id="categoryColor" class="form-control form-control-color" value="#36a2eb" />
-                      </div>
-                    </div>
-                    <div class="row g-2 mt-3">
-                      <div class="col-md-3">
-                        <button type="submit" id="saveCategoryBtn" class="btn btn-primary w-100">Guardar Categoría</button>
-                      </div>
-                      <div class="col-md-3">
-                        <button type="button" id="cancelCategoryEditBtn" class="btn btn-outline-secondary w-100 d-none">Cancelar</button>
-                      </div>
-                    </div>
-                  </form>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <!-- Category List -->
-          <div class="row d-none" id="categoryListRow">
-            <div class="col-12">
-              <div class="card">
-                <div class="card-header">Tus Categorías</div>
-                <div class="card-body">
-                  <div id="categoryListContainer">
-                    <p class="text-muted mb-0">Cargando categorías...</p>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-
           <!-- Charts -->
           <div class="row">
-            <div class="col-md-4">
+            <div class="col-md-6">
               <div class="card">
-                <div class="card-header">Gastos por categoría</div>
+                <div class="card-header">
+                  <i class="bi bi-pie-chart"></i> Gastos por categoría
+                </div>
                 <div class="card-body">
                   <canvas id="chartGastos"></canvas>
                 </div>
               </div>
             </div>
-            <div class="col-md-4">
+            <div class="col-md-6">
               <div class="card">
-                <div class="card-header">Evolución del balance</div>
-                <div class="card-body">
-                  <canvas id="chartEvolucion"></canvas>
+                <div class="card-header">
+                  <i class="bi bi-bar-chart"></i> Comparación Mensual
                 </div>
-              </div>
-            </div>
-            <div class="col-md-4">
-              <div class="card">
-                <div class="card-header">Comparación Mensual</div>
                 <div class="card-body">
                   <canvas id="chartMensual"></canvas>
                 </div>
@@ -479,8 +411,10 @@
                           id="categoria"
                           class="form-control"
                           placeholder="Ej: Comida, Ropa..."
+                          list="categoriaSuggestions"
                           required />
-                      </div>
+                        <datalist id="categoriaSuggestions"></datalist>
+                        </div>
                       <div class="col-md-2">
                         <label class="form-label" for="fecha">Fecha</label>
                         <input
@@ -537,7 +471,7 @@
               <div class="card">
                 <div class="card-header">Movimientos</div>
                 <div class="card-body">
-                  <table class="table">
+                  <table class="table table-hover table-striped">
                     <thead>
                       <tr>
                         <th data-column="fecha">Fecha</th>

@@ -44,10 +44,16 @@ async function apiFetch(endpoint, options = {}) {
     headers,
   });
 
-  const data = await response.json();
+  let data;
+  const contentType = response.headers.get("content-type") || "";
+  if (contentType.includes("application/json")) {
+    data = await response.json();
+  } else {
+    data = { message: await response.text() };
+  }
 
   if (!response.ok) {
-    const error = new Error(data.message || data.error || "API Error");
+    const error = new Error(data.message || data.error || `HTTP ${response.status}`);
     error.status = response.status;
     error.data = data;
     throw error;

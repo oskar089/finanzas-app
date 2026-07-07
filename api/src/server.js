@@ -14,6 +14,12 @@ const FRONTEND_PATH = path.join(__dirname, "..", "..");
 // Load environment variables
 dotenv.config();
 
+// Validate required secrets at startup
+if (!process.env.JWT_SECRET) {
+  console.error("❌ JWT_SECRET environment variable is required");
+  process.exit(1);
+}
+
 // Import routes
 import authRoutes from "./routes/auth.js";
 import accountRoutes from "./routes/accounts.js";
@@ -82,13 +88,13 @@ app.use(
 // Rate limiting
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100, // Limit each IP to 100 requests per windowMs
+  max: 500, // Limit each IP to 500 requests per windowMs
   message: "Too many requests from this IP, please try again later.",
 });
 
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 20, // Stricter limit for auth endpoints
+  max: 100, // Stricter limit for auth endpoints
   message: "Too many authentication attempts, please try again later.",
 });
 
@@ -99,7 +105,7 @@ app.use("/api/auth/", authLimiter);
 // BODY PARSING
 // ============================================================
 
-app.use(express.json({ limit: "10mb" }));
+app.use(express.json({ limit: "500kb" }));
 app.use(express.urlencoded({ extended: true }));
 
 // ============================================================

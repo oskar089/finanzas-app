@@ -18,8 +18,8 @@
 
 ## Phase 2: Performance (PR 2/4)
 
-- [ ] 2.1 Dashboard monthly aggregate with Prisma groupBy
-- [ ] 2.2 Budget N+1 fix with single GROUP BY
+- [x] 2.1 Dashboard monthly aggregate with Prisma groupBy (single query, take:5 for recent)
+- [x] 2.2 Budget N+1 fix with single GROUP BY
 
 ## Phase 3: Bug Fixes (PR 3/4)
 

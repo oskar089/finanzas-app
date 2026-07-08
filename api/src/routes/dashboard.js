@@ -36,7 +36,7 @@ router.get("/", async (req, res, next) => {
       0
     );
 
-    // Get transactions for the period
+    // Get transactions for the period (aggregate data)
     const transactions = await prisma.transaction.findMany({
       where: {
         userId: req.user.id,
@@ -45,7 +45,6 @@ router.get("/", async (req, res, next) => {
           lte: endDate,
         },
       },
-      orderBy: { date: "desc" },
       include: {
         account: {
           select: {
@@ -106,8 +105,26 @@ router.get("/", async (req, res, next) => {
         return acc;
       }, []);
 
-    // Get recent transactions (last 5)
-    const recentTransactions = transactions.slice(0, 5);
+    // Get recent transactions (last 5) — separate take:5 query
+    const recentTransactions = await prisma.transaction.findMany({
+      where: {
+        userId: req.user.id,
+        date: {
+          gte: startDate,
+          lte: endDate,
+        },
+      },
+      orderBy: { date: "desc" },
+      take: 5,
+      include: {
+        account: {
+          select: {
+            name: true,
+            type: true,
+          },
+        },
+      },
+    });
 
     // Get budget status for current month
     const currentMonth = now.getMonth() + 1;
@@ -121,36 +138,45 @@ router.get("/", async (req, res, next) => {
       },
     });
 
-    const budgetStatus = await Promise.all(
-      budgets.map(async (budget) => {
-        const spending = await prisma.transaction.aggregate({
-          where: {
-            userId: req.user.id,
-            type: "EXPENSE",
-            category: budget.category,
-            date: {
-              gte: new Date(currentYear, currentMonth - 1, 1),
-              lt: new Date(currentYear, currentMonth, 1),
+    // Single GROUP BY for budget spending
+    const budgetCategoryIds = budgets.map((b) => b.category);
+    const spendingByCategory =
+      budgetCategoryIds.length > 0
+        ? await prisma.transaction.groupBy({
+            by: ["category"],
+            where: {
+              userId: req.user.id,
+              type: "EXPENSE",
+              category: { in: budgetCategoryIds },
+              date: {
+                gte: new Date(currentYear, currentMonth - 1, 1),
+                lt: new Date(currentYear, currentMonth, 1),
+              },
             },
-          },
-          _sum: { amount: true },
-        });
+            _sum: { amount: true },
+          })
+        : [];
 
-        const spent = Number(spending._sum.amount || 0);
-        const budgetAmount = Number(budget.amount);
-
-        return {
-          category: budget.category,
-          budget: budgetAmount,
-          spent,
-          remaining: budgetAmount - spent,
-          percentage:
-            budgetAmount > 0
-              ? Math.round((spent / budgetAmount) * 100 * 100) / 100
-              : 0,
-        };
-      })
+    // Merge spending into budgets
+    const spendingMap = new Map(
+      spendingByCategory.map((s) => [s.category, Number(s._sum.amount || 0)])
     );
+
+    const budgetStatus = budgets.map((budget) => {
+      const spent = spendingMap.get(budget.category) ?? 0;
+      const budgetAmount = Number(budget.amount);
+
+      return {
+        category: budget.category,
+        budget: budgetAmount,
+        spent,
+        remaining: budgetAmount - spent,
+        percentage:
+          budgetAmount > 0
+            ? Math.round((spent / budgetAmount) * 100 * 100) / 100
+            : 0,
+      };
+    });
 
     res.json({
       summary: {

@@ -184,46 +184,64 @@ router.get("/", async (req, res, next) => {
  */
 router.get("/monthly", async (req, res, next) => {
   try {
-    const { months = 6 } = req.query;
+    const { months: monthsParam = 6 } = req.query;
+    const monthCount = parseInt(monthsParam, 10);
     const now = new Date();
 
-    const monthlyData = [];
+    // Build the list of expected months (for padding empty ones)
+    const expectedMonths = [];
+    for (let i = monthCount - 1; i >= 0; i--) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      expectedMonths.push({ month: d.getMonth() + 1, year: d.getFullYear() });
+    }
 
-    for (let i = 0; i < months; i++) {
-      const date = new Date(now.getFullYear(), now.getMonth() - i, 1);
-      const year = date.getFullYear();
-      const month = date.getMonth() + 1;
+    // Single query: fetch all transactions in the 6-month window
+    const sixMonthsAgo = new Date(now.getFullYear(), now.getMonth() - monthCount + 1, 1);
+    const endDate = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
 
-      const startDate = new Date(year, month - 1, 1);
-      const endDate = new Date(year, month, 0, 23, 59, 59);
-
-      const transactions = await prisma.transaction.findMany({
-        where: {
-          userId: req.user.id,
-          date: {
-            gte: startDate,
-            lte: endDate,
-          },
+    const transactions = await prisma.transaction.findMany({
+      where: {
+        userId: req.user.id,
+        date: {
+          gte: sixMonthsAgo,
+          lte: endDate,
         },
-      });
+      },
+    });
 
-      const income = transactions
-        .filter((t) => t.type === "INCOME")
-        .reduce((sum, t) => sum + Number(t.amount), 0);
+    // Group by year+month in JS
+    const grouped = new Map();
+    for (const t of transactions) {
+      const key = `${t.date.getFullYear()}-${t.date.getMonth() + 1}`;
+      if (!grouped.has(key)) {
+        grouped.set(key, { income: 0, expenses: 0, transactionCount: 0 });
+      }
+      const entry = grouped.get(key);
+      if (t.type === "INCOME") {
+        entry.income += Number(t.amount);
+      } else if (t.type === "EXPENSE") {
+        entry.expenses += Number(t.amount);
+      }
+      entry.transactionCount++;
+    }
 
-      const expenses = transactions
-        .filter((t) => t.type === "EXPENSE")
-        .reduce((sum, t) => sum + Number(t.amount), 0);
-
-      monthlyData.unshift({
+    // Build response — one entry per expected month, pad with zeros
+    const monthlyData = expectedMonths.map(({ month, year }) => {
+      const key = `${year}-${month}`;
+      const data = grouped.get(key) ?? {
+        income: 0,
+        expenses: 0,
+        transactionCount: 0,
+      };
+      return {
         month,
         year,
-        income,
-        expenses,
-        net: income - expenses,
-        transactionCount: transactions.length,
-      });
-    }
+        income: data.income,
+        expenses: data.expenses,
+        net: data.income - data.expenses,
+        transactionCount: data.transactionCount,
+      };
+    });
 
     res.json({ monthlyData });
   } catch (error) {

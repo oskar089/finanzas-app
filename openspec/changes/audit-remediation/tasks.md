@@ -12,9 +12,9 @@
 - [x] 1.8 Wrap registration in Prisma `$transaction` in `api/src/routes/auth.js`
 - [x] 1.9 Remove `localStorage.setToken()` from `js/api.js`, keep Bearer fallback
 - [x] 1.10 Replace hardcoded password in `docker-compose.yml` with `${DB_PASSWORD}`
-- [ ] 1.11 Test: POST /auth/login sets HttpOnly cookie; /me reads from cookie
-- [ ] 1.12 Test: Refresh token rotation — old invalidated, new pair issued
-- [ ] 1.13 Test: Duplicate email — 409, full Prisma $transaction rollback
+- [x] 1.11 Test: POST /auth/login sets HttpOnly cookie; /me reads from cookie
+- [x] 1.12 Test: Refresh token rotation — old invalidated, new pair issued
+- [x] 1.13 Test: Duplicate email — 409, full Prisma $transaction rollback
 
 ## Phase 2: Performance (PR 2/4)
 

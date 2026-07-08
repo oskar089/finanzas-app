@@ -7,11 +7,11 @@
 - [x] 1.3 Configure CSP nonce generation and cookie-parser in `api/src/server.js`
 - [x] 1.4 Modify `api/src/middleware/auth.js` to read JWT from HttpOnly cookie (fallback Bearer)
 - [x] 1.5 Add `generateRefreshToken()` and `verifyRefresh()` to auth middleware
-- [ ] 1.6 Add POST `/auth/refresh` rotation endpoint in `api/src/routes/auth.js`
-- [ ] 1.7 Set HttpOnly cookies on login/register in `api/src/routes/auth.js`
-- [ ] 1.8 Wrap registration in Prisma `$transaction` in `api/src/routes/auth.js`
-- [ ] 1.9 Remove `localStorage.setToken()` from `js/api.js`, keep Bearer fallback
-- [ ] 1.10 Replace hardcoded password in `docker-compose.yml` with `${DB_PASSWORD}`
+- [x] 1.6 Add POST `/auth/refresh` rotation endpoint in `api/src/routes/auth.js`
+- [x] 1.7 Set HttpOnly cookies on login/register in `api/src/routes/auth.js`
+- [x] 1.8 Wrap registration in Prisma `$transaction` in `api/src/routes/auth.js`
+- [x] 1.9 Remove `localStorage.setToken()` from `js/api.js`, keep Bearer fallback
+- [x] 1.10 Replace hardcoded password in `docker-compose.yml` with `${DB_PASSWORD}`
 - [ ] 1.11 Test: POST /auth/login sets HttpOnly cookie; /me reads from cookie
 - [ ] 1.12 Test: Refresh token rotation — old invalidated, new pair issued
 - [ ] 1.13 Test: Duplicate email — 409, full Prisma $transaction rollback

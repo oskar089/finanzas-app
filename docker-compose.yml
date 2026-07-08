@@ -9,7 +9,7 @@ services:
       - "5432:5432"
     environment:
       POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: password
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
       POSTGRES_DB: financeapp
     volumes:
       - postgres_data:/var/lib/postgresql/data
@@ -26,8 +26,8 @@ services:
     ports:
       - "5050:80"
     environment:
-      PGADMIN_DEFAULT_EMAIL: admin@financeapp.com
-      PGADMIN_DEFAULT_PASSWORD: admin
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_EMAIL:-admin@financeapp.com}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_PASSWORD}
     depends_on:
       postgres:
         condition: service_healthy

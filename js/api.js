@@ -12,10 +12,6 @@ function getToken() {
   return localStorage.getItem("token");
 }
 
-function setToken(token) {
-  localStorage.setItem("token", token);
-}
-
 function clearToken() {
   localStorage.removeItem("token");
 }
@@ -71,7 +67,8 @@ async function register(name, email, password) {
     method: "POST",
     body: JSON.stringify({ name, email, password }),
   });
-  setToken(data.token);
+  // Token is set as HttpOnly cookie by the server
+  // Bearer token in response body kept for backward compat
   return data;
 }
 
@@ -80,7 +77,8 @@ async function login(email, password) {
     method: "POST",
     body: JSON.stringify({ email, password }),
   });
-  setToken(data.token);
+  // Token is set as HttpOnly cookie by the server
+  // Bearer token in response body kept for backward compat
   return data;
 }
 
@@ -353,6 +351,7 @@ export {
   loginWithApple,
   isLoggedIn,
   getToken,
+  clearToken,
   // Accounts
   getAccounts,
   getAccount,

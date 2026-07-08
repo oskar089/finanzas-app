@@ -5,8 +5,8 @@
 - [x] 1.1 Add `RefreshToken` model to `api/prisma/schema.prisma` with userId, token, expiresAt, index
 - [x] 1.2 Add `cookie-parser` dep to `api/package.json`
 - [x] 1.3 Configure CSP nonce generation and cookie-parser in `api/src/server.js`
-- [ ] 1.4 Modify `api/src/middleware/auth.js` to read JWT from HttpOnly cookie (fallback Bearer)
-- [ ] 1.5 Add `generateRefreshToken()` and `verifyRefresh()` to auth middleware
+- [x] 1.4 Modify `api/src/middleware/auth.js` to read JWT from HttpOnly cookie (fallback Bearer)
+- [x] 1.5 Add `generateRefreshToken()` and `verifyRefresh()` to auth middleware
 - [ ] 1.6 Add POST `/auth/refresh` rotation endpoint in `api/src/routes/auth.js`
 - [ ] 1.7 Set HttpOnly cookies on login/register in `api/src/routes/auth.js`
 - [ ] 1.8 Wrap registration in Prisma `$transaction` in `api/src/routes/auth.js`

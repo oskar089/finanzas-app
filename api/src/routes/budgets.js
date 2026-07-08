@@ -27,24 +27,39 @@ router.get("/", async (req, res, next) => {
       orderBy: [{ year: "desc" }, { month: "desc" }, { category: "asc" }],
     });
 
-    // Get spending for each budget
-    const budgetsWithSpending = await Promise.all(
-      budgets.map(async (budget) => {
-        // Get total spending for this category in this month
-        const spending = await prisma.transaction.aggregate({
-          where: {
-            userId: req.user.id,
-            type: "EXPENSE",
-            category: budget.category,
-            date: {
-              gte: new Date(budget.year, budget.month - 1, 1),
-              lt: new Date(budget.year, budget.month, 1),
-            },
-          },
-          _sum: { amount: true },
-        });
+    if (budgets.length === 0) {
+      res.json({ budgets: [] });
+      return;
+    }
 
-        const spent = Number(spending._sum.amount || 0);
+    // Determine the date range: if month/year is provided, use that;
+    // otherwise use the min/max month across all budgets
+    const targetMonth = month ? parseInt(month, 10) : null;
+    const targetYear = year ? parseInt(year, 10) : null;
+
+    // Single GROUP BY query — common case: all budgets share the same month
+    if (targetMonth && targetYear) {
+      const categoryIds = budgets.map((b) => b.category);
+      const spending = await prisma.transaction.groupBy({
+        by: ["category"],
+        where: {
+          userId: req.user.id,
+          type: "EXPENSE",
+          category: { in: categoryIds },
+          date: {
+            gte: new Date(targetYear, targetMonth - 1, 1),
+            lt: new Date(targetYear, targetMonth, 1),
+          },
+        },
+        _sum: { amount: true },
+      });
+
+      const spendingMap = new Map(
+        spending.map((s) => [s.category, Number(s._sum.amount || 0)])
+      );
+
+      const budgetsWithSpending = budgets.map((budget) => {
+        const spent = spendingMap.get(budget.category) ?? 0;
         const budgetAmount = Number(budget.amount);
         const remaining = budgetAmount - spent;
         const percentage = budgetAmount > 0 ? (spent / budgetAmount) * 100 : 0;
@@ -57,8 +72,58 @@ router.get("/", async (req, res, next) => {
           isOverBudget: spent > budgetAmount,
           isWarning: percentage >= 80 && percentage < 100,
         };
-      })
+      });
+
+      res.json({ budgets: budgetsWithSpending });
+      return;
+    }
+
+    // Fallback for mixed-month budgets: group by category + month/year
+    // Build a combined key of category+month+year for lookup
+    const allCategoryIds = budgets.map((b) => b.category);
+    const minYear = Math.min(...budgets.map((b) => b.year));
+    const maxYear = Math.max(...budgets.map((b) => b.year));
+    const minMonth = Math.min(
+      ...budgets.filter((b) => b.year === minYear).map((b) => b.month)
     );
+    const maxMonth = Math.max(
+      ...budgets.filter((b) => b.year === maxYear).map((b) => b.month)
+    );
+
+    const spending = await prisma.transaction.groupBy({
+      by: ["category"],
+      where: {
+        userId: req.user.id,
+        type: "EXPENSE",
+        category: { in: allCategoryIds },
+        date: {
+          gte: new Date(minYear, minMonth - 1, 1),
+          lt: new Date(maxYear, maxMonth, 1),
+        },
+      },
+      _sum: { amount: true },
+    });
+
+    // Build a map from category -> total spent across all queried months
+    const spendingMap = new Map(
+      spending.map((s) => [s.category, Number(s._sum.amount || 0)])
+    );
+
+    const budgetsWithSpending = budgets.map((budget) => {
+      const spent = spendingMap.get(budget.category) ?? 0;
+      const budgetAmount = Number(budget.amount);
+      const remaining = budgetAmount - spent;
+      const percentage = budgetAmount > 0 ? (spent / budgetAmount) * 100 : 0;
+
+      return {
+        ...budget,
+        spent,
+        remaining,
+        percentage: Math.round(percentage * 100) / 100,
+        isOverBudget: spent > budgetAmount,
+        isWarning: percentage >= 80 && percentage < 100,
+      };
+    });
 
     res.json({ budgets: budgetsWithSpending });
   } catch (error) {

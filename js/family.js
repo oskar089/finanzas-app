@@ -6,6 +6,7 @@ import {
   updateFamilyMemberRole,
   deleteFamilyGroup,
 } from "./api.js";
+import { escapeHTML, showToast, showConfirm } from "./shared.js";
 
 // ============================================================
 // DOM ELEMENTS
@@ -14,65 +15,6 @@ import {
 const familyGroupForm = document.getElementById("familyGroupForm");
 const familyGroupName = document.getElementById("familyGroupName");
 const familyGroupsContainer = document.getElementById("familyGroupsContainer");
-
-// ============================================================
-// UTILITY FUNCTIONS (matching app.js pattern)
-// ============================================================
-
-function escapeHTML(str) {
-  return String(str ?? "")
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#39;");
-}
-
-function showToast(mensaje, tipo = "success") {
-  const container = document.getElementById("toastContainer");
-  const toast = document.createElement("div");
-  toast.className = `app-toast app-toast-${tipo}`;
-  toast.textContent = mensaje;
-  container.appendChild(toast);
-
-  requestAnimationFrame(() => toast.classList.add("show"));
-  setTimeout(() => {
-    toast.classList.remove("show");
-    toast.addEventListener("transitionend", () => toast.remove(), {
-      once: true,
-    });
-  }, 3500);
-}
-
-function showConfirm(mensaje) {
-  return new Promise((resolve) => {
-    const overlay = document.getElementById("confirmOverlay");
-    const messageEl = document.getElementById("confirmMessage");
-    const acceptBtn = document.getElementById("confirmAcceptBtn");
-    const cancelBtn = document.getElementById("confirmCancelBtn");
-
-    messageEl.textContent = mensaje;
-    overlay.classList.remove("d-none");
-
-    const cleanup = (resultado) => {
-      overlay.classList.add("d-none");
-      acceptBtn.removeEventListener("click", onAccept);
-      cancelBtn.removeEventListener("click", onCancel);
-      overlay.removeEventListener("click", onOverlayClick);
-      resolve(resultado);
-    };
-
-    const onAccept = () => cleanup(true);
-    const onCancel = () => cleanup(false);
-    const onOverlayClick = (e) => {
-      if (e.target === overlay) cleanup(false);
-    };
-
-    acceptBtn.addEventListener("click", onAccept);
-    cancelBtn.addEventListener("click", onCancel);
-    overlay.addEventListener("click", onOverlayClick);
-  });
-}
 
 // ============================================================
 // STATE

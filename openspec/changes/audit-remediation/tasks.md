@@ -21,13 +21,18 @@
 - [x] 2.1 Dashboard monthly aggregate with Prisma groupBy (single query, take:5 for recent)
 - [x] 2.2 Budget N+1 fix with single GROUP BY
 
-## Phase 3: Bug Fixes (PR 3/4)
+## Phase 3: Bug Fixes (PR 3/4) [COMPLETE]
 
-- [ ] 3.1 Account delete race condition with $transaction
+- [x] 3.1 Normalize decimal separator in filter handlers (comma to dot)
+- [x] 3.2 Wrap account soft-delete in Prisma $transaction (race condition fix)
+- [x] 3.3 Import escapeHTML, showToast, showConfirm from shared.js in family.js
+- [x] 3.4 Remove 3 duplicated utility functions from family.js
+- [x] 3.5 Add chart error toast on API failure in actualizarChartMensual
+- [x] 3.6 Test: Filter with comma decimal separator normalizes correctly
+- [x] 3.7 Test: Soft-delete with concurrent requests — atomic $transaction rollback
+- [x] 3.8 Test: Chart error shows toast; family uses shared functions
 
 ## Phase 4: UI/Design Polish (PR 4/4)
 
-- [ ] 4.1 Normalize decimal comma in filter handlers
-- [ ] 4.2 Remove duplicated functions from family.js, import from shared.js
-- [ ] 4.3 CSS transitions, motion reduction, palette, focus indicators
-- [ ] 4.4 Replace emoji icons with Bootstrap Icons in index.html
+- [ ] 4.1 CSS transitions, motion reduction, palette, focus indicators
+- [ ] 4.2 Replace emoji icons with Bootstrap Icons in index.html

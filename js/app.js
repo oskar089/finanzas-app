@@ -113,8 +113,8 @@ async function loadMovimientos() {
     if (filterCategoria !== "todas") params.category = filterCategoria;
     if (filterFechaDesde) params.startDate = filterFechaDesde;
     if (filterFechaHasta) params.endDate = filterFechaHasta;
-    if (filterMontoMin) params.minAmount = filterMontoMin;
-    if (filterMontoMax) params.maxAmount = filterMontoMax;
+    if (filterMontoMin) params.minAmount = Number(String(filterMontoMin).replace(",", "."));
+    if (filterMontoMax) params.maxAmount = Number(String(filterMontoMax).replace(",", "."));
     if (filterConcepto) params.concept = filterConcepto;
 
     const data = await getTransactions(params);
@@ -1023,6 +1023,7 @@ function actualizarChartMensual() {
     })
     .catch((err) => {
       console.error("Error loading monthly data:", err);
+      showToast("Error al cargar el gráfico mensual", "error");
     });
 }
 

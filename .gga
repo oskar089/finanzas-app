@@ -1,0 +1,12 @@
+﻿# GGA Configuration
+# See: https://github.com/Gentleman-Programming/gentleman-guardian-angel
+
+# AI Provider for code review
+# Options: claude, gemini, codex, opencode, ollama:model, etc.
+PROVIDER=opencode
+
+# Review mode: staged (default), last-commit, pr
+MODE=staged
+
+# Cache: true (default) to skip unchanged files
+CACHE=true

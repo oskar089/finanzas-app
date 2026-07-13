@@ -34,5 +34,5 @@
 
 ## Phase 4: UI/Design Polish (PR 4/4)
 
-- [ ] 4.1 CSS transitions, motion reduction, palette, focus indicators
-- [ ] 4.2 Replace emoji icons with Bootstrap Icons in index.html
+- [x] 4.1 CSS transitions, motion reduction, palette, focus indicators
+- [x] 4.2 Replace emoji icons with Bootstrap Icons in index.html

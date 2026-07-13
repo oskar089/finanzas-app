@@ -1,10 +1,6 @@
-# User Auth Specification
+# Delta for user-auth
 
-## Purpose
-
-Handle user registration, login, profile management, and JWT-based session lifecycle for the SPA frontend and REST API.
-
-## Requirements
+## MODIFIED Requirements
 
 ### Requirement: Registration
 
@@ -63,6 +59,8 @@ The system MUST restore the current user session by validating the JWT from the 
 - THEN the API rotates the refresh token and sets a new JWT cookie
 - AND the profile data is returned
 
+## ADDED Requirements
+
 ### Requirement: Refresh Token Rotation
 
 The system MUST support refresh token rotation: each refresh request invalidates the old refresh token and issues a new one.
@@ -79,35 +77,3 @@ The system MUST support refresh token rotation: each refresh request invalidates
 - GIVEN a refresh token that was already rotated
 - WHEN POST /api/auth/refresh is called with the old token
 - THEN all refresh tokens for that user are invalidated (theft detection)
-
-### Requirement: Profile Update
-
-The system MUST allow authenticated users to update their name, email, and avatar.
-
-#### Scenario: Successful profile update
-
-- GIVEN an authenticated user
-- WHEN PUT /api/auth/profile is called with new name and avatar URL
-- THEN the user record is updated and the new profile is returned
-
-#### Scenario: Email conflict on update
-
-- GIVEN an authenticated user and another user with email "other@example.com"
-- WHEN PUT /api/auth/profile is called with email "other@example.com"
-- THEN the API returns a 409 Conflict error
-
-### Requirement: Password Toggle (UI)
-
-The frontend SHOULD provide a visibility toggle (eye icon) on password fields in registration and login forms.
-
-#### Scenario: Toggle reveals password
-
-- GIVEN a login form with a password field of type "password"
-- WHEN the user clicks the eye icon
-- THEN the input type changes to "text" and the password is visible
-
-#### Scenario: Toggle hides password
-
-- GIVEN a login form with visible password (type "text")
-- WHEN the user clicks the eye icon again
-- THEN the input type changes back to "password"

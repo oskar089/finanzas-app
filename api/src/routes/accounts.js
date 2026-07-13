@@ -125,20 +125,22 @@ router.delete("/:id", async (req, res, next) => {
       throw new ApiError(404, "Account not found");
     }
 
-    const txCount = await prisma.transaction.count({
-      where: { accountId: req.params.id },
-    });
+    await prisma.$transaction(async (tx) => {
+      const txCount = await tx.transaction.count({
+        where: { accountId: req.params.id },
+      });
 
-    if (txCount > 0) {
-      throw new ApiError(
-        409,
-        `Cannot delete account with ${txCount} existing transaction(s). Remove or reassign transactions first.`,
-      );
-    }
+      if (txCount > 0) {
+        throw new ApiError(
+          409,
+          `Cannot delete account with ${txCount} existing transaction(s). Remove or reassign transactions first.`,
+        );
+      }
 
-    await prisma.account.update({
-      where: { id: req.params.id },
-      data: { isActive: false },
+      await tx.account.update({
+        where: { id: req.params.id },
+        data: { isActive: false },
+      });
     });
 
     res.json({ message: "Account deleted successfully" });

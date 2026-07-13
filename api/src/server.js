@@ -2,6 +2,8 @@ import express from "express";
 import cors from "cors";
 import helmet from "helmet";
 import rateLimit from "express-rate-limit";
+import cookieParser from "cookie-parser";
+import crypto from "crypto";
 import dotenv from "dotenv";
 import path from "path";
 import { fileURLToPath } from "url";
@@ -40,7 +42,13 @@ const PORT = process.env.PORT || 3000;
 // SECURITY MIDDLEWARE
 // ============================================================
 
-// Helmet - Security headers (configurado para permitir CDN)
+// CSP nonce middleware — generates a unique nonce per request
+app.use((req, res, next) => {
+  res.locals.nonce = crypto.randomBytes(16).toString("hex");
+  next();
+});
+
+// Helmet - Security headers with nonce-based CSP
 app.use(
   helmet({
     contentSecurityPolicy: {
@@ -48,14 +56,14 @@ app.use(
         defaultSrc: ["'self'"],
         scriptSrc: [
           "'self'",
-          "'unsafe-inline'",
+          (req, res) => `'nonce-${res.locals.nonce}'`,
           "https://cdn.jsdelivr.net",
           "https://accounts.google.com",
           "https://appleid.cdn-apple.com",
         ],
         styleSrc: [
           "'self'",
-          "'unsafe-inline'",
+          "'unsafe-inline'", // needed during transition for Chart.js dynamic styles
           "https://cdn.jsdelivr.net",
           "https://accounts.google.com",
           "https://appleid.cdn-apple.com",
@@ -107,6 +115,7 @@ app.use("/api/auth/", authLimiter);
 
 app.use(express.json({ limit: "500kb" }));
 app.use(express.urlencoded({ extended: true }));
+app.use(cookieParser());
 
 // ============================================================
 // PASSPORT INITIALIZATION (Stateless OAuth)

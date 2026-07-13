@@ -2,10 +2,13 @@
   --bg-start: #0f0c29;
   --bg-mid: #302b63;
   --bg-end: #24243e;
+  --primary: #667eea;
+  --primary-dark: #764ba2;
   --primary-start: #667eea;
   --primary-end: #764ba2;
   --purple-light: #a855f7;
   --purple-dark: #7c3aed;
+  --primary-gradient: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
   --white: #ffffff;
   --glass-bg: rgba(255, 255, 255, 0.06);
   --glass-border: rgba(255, 255, 255, 0.1);
@@ -23,8 +26,22 @@
   padding: 0;
 }
 
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
 html {
   height: 100%;
+}
+
+:focus-visible {
+  outline: 2px solid var(--primary, #667eea);
+  outline-offset: 2px;
 }
 
 body {
@@ -85,10 +102,12 @@ body {
   pointer-events: none;
 }
 
-@keyframes floatOrb {
-  0%, 100% { transform: translate(0, 0) scale(1); }
-  33%      { transform: translate(30px, -20px) scale(1.05); }
-  66%      { transform: translate(-20px, 15px) scale(0.95); }
+@media (prefers-reduced-motion: no-preference) {
+  @keyframes floatOrb {
+    0%, 100% { transform: translate(0, 0) scale(1); }
+    33%      { transform: translate(30px, -20px) scale(1.05); }
+    66%      { transform: translate(-20px, 15px) scale(0.95); }
+  }
 }
 
 .auth-card {
@@ -155,14 +174,16 @@ body {
   pointer-events: none;
 }
 
-@keyframes morphBlob {
-  0%, 100% { border-radius: 30% 70% 70% 30% / 30% 30% 70% 70%; transform: rotate(0deg); }
-  50%      { border-radius: 70% 30% 30% 70% / 70% 70% 30% 30%; transform: rotate(180deg); }
-}
+@media (prefers-reduced-motion: no-preference) {
+  @keyframes morphBlob {
+    0%, 100% { border-radius: 30% 70% 70% 30% / 30% 30% 70% 70%; transform: rotate(0deg); }
+    50%      { border-radius: 70% 30% 30% 70% / 70% 70% 30% 30%; transform: rotate(180deg); }
+  }
 
-@keyframes pulse {
-  0%, 100% { transform: scale(1); opacity: 0.5; }
-  50% { transform: scale(1.1); opacity: 0.8; }
+  @keyframes pulse {
+    0%, 100% { transform: scale(1); opacity: 0.5; }
+    50% { transform: scale(1.1); opacity: 0.8; }
+  }
 }
 
 .auth-illustration {
@@ -190,9 +211,11 @@ body {
   animation: floatIcon 6s ease-in-out infinite;
 }
 
-@keyframes floatIcon {
-  0%, 100% { transform: translateZ(10px) translateY(0); }
-  50%      { transform: translateZ(10px) translateY(-8px); }
+@media (prefers-reduced-motion: no-preference) {
+  @keyframes floatIcon {
+    0%, 100% { transform: translateZ(10px) translateY(0); }
+    50%      { transform: translateZ(10px) translateY(-8px); }
+  }
 }
 
 .illustration-icon {
@@ -226,7 +249,7 @@ body {
   height: 10px;
   border-radius: 50%;
   background: rgba(255, 255, 255, 0.3);
-  transition: all 0.3s ease;
+  transition: background 0.3s ease, width 0.3s ease;
 }
 
 .dot.active {
@@ -265,7 +288,7 @@ body {
 .auth-avatar {
   width: 80px;
   height: 80px;
-  background: linear-gradient(135deg, var(--primary-start), var(--primary-end));
+  background: var(--primary-gradient);
   border-radius: 50%;
   display: flex;
   align-items: center;
@@ -304,7 +327,7 @@ body {
   font-weight: 500;
   color: #374151;
   background: #f9fafb;
-  transition: all 0.2s ease;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
   letter-spacing: 0.5px;
 }
 
@@ -400,7 +423,7 @@ body {
   align-items: center;
   justify-content: center;
   gap: 10px;
-  transition: all 0.2s ease;
+  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease, background 0.2s ease;
   background: white;
   color: #374151;
 }
@@ -483,7 +506,7 @@ body.dark-mode .social-divider::after {
 .auth-btn {
   width: 100%;
   padding: 14px;
-  background: linear-gradient(135deg, var(--primary-start), var(--primary-end));
+  background: var(--primary-gradient);
   color: white;
   border: none;
   border-radius: 12px;
@@ -491,7 +514,7 @@ body.dark-mode .social-divider::after {
   font-weight: 700;
   letter-spacing: 1px;
   cursor: pointer;
-  transition: all 0.25s ease;
+  transition: transform 0.25s ease, box-shadow 0.25s ease, opacity 0.25s ease;
   box-shadow: 0 4px 16px rgba(102, 126, 234, 0.25);
 }
 
@@ -535,15 +558,17 @@ body.dark-mode .social-divider::after {
    ANIMATIONS
    ============================================================ */
 
-@keyframes fadeInUp {
-  from { opacity: 0; transform: translateY(20px); }
-  to   { opacity: 1; transform: translateY(0); }
-}
+@media (prefers-reduced-motion: no-preference) {
+  @keyframes fadeInUp {
+    from { opacity: 0; transform: translateY(20px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
 
-@keyframes gradientShift {
-  0%   { background-position: 0% 50%; }
-  50%  { background-position: 100% 50%; }
-  100% { background-position: 0% 50%; }
+  @keyframes gradientShift {
+    0%   { background-position: 0% 50%; }
+    50%  { background-position: 100% 50%; }
+    100% { background-position: 0% 50%; }
+  }
 }
 
 /* ============================================================
@@ -661,7 +686,7 @@ header p {
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: all var(--transition-med);
+  transition: transform var(--transition-med), background var(--transition-med), border-color var(--transition-med);
   padding: 0;
   line-height: 1;
 }
@@ -682,7 +707,7 @@ header p {
   font-size: 0.85rem;
   font-weight: 600;
   cursor: pointer;
-  transition: all var(--transition-med);
+  transition: transform var(--transition-med), background var(--transition-med), border-color var(--transition-med), box-shadow var(--transition-med);
   white-space: nowrap;
 }
 
@@ -745,7 +770,7 @@ header p {
 }
 
 .card-header {
-  background: linear-gradient(135deg, var(--primary-start), var(--primary-end));
+  background: var(--primary-gradient);
   color: white;
   font-weight: 700;
   font-size: 0.95rem;
@@ -771,10 +796,7 @@ header p {
   display: block;
   text-align: center;
   padding: 0.75rem 0;
-  background: linear-gradient(135deg, var(--primary-start), var(--purple-light));
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
+  color: var(--primary);
   letter-spacing: -1px;
   line-height: 1.1;
   text-shadow:
@@ -792,7 +814,7 @@ header p {
   cursor: pointer;
   font-weight: 600;
   font-size: 0.85rem;
-  transition: all 0.2s ease;
+  transition: background 0.2s ease, border-color 0.2s ease;
   border: none;
 }
 
@@ -819,7 +841,7 @@ header p {
 }
 
 #addMovimientoBtn {
-  background: linear-gradient(135deg, var(--primary-start), var(--primary-end));
+  background: var(--primary-gradient);
   color: white;
   border: none;
   padding: 12px 28px;
@@ -827,7 +849,7 @@ header p {
   font-weight: 700;
   font-size: 0.9rem;
   letter-spacing: 0.3px;
-  transition: all 0.25s ease;
+  transition: transform 0.25s ease, box-shadow 0.25s ease;
   min-height: 44px;
   box-shadow: 0 4px 16px rgba(102, 126, 234, 0.25);
   cursor: pointer;
@@ -849,7 +871,7 @@ header p {
   font-weight: 600;
   font-size: 0.9rem;
   min-height: 44px;
-  transition: all 0.25s ease;
+  transition: transform 0.25s ease, box-shadow 0.25s ease;
   background: linear-gradient(135deg, #43a047, #2e7d32);
   color: white;
   border: none;
@@ -873,7 +895,7 @@ header p {
   font-weight: 600;
   font-size: 0.9rem;
   min-height: 44px;
-  transition: all 0.25s ease;
+  transition: transform 0.25s ease, box-shadow 0.25s ease;
   background: linear-gradient(135deg, #0ea5e9, #0284c7);
   color: white;
   border: none;
@@ -897,7 +919,7 @@ header p {
   font-weight: 600;
   font-size: 0.9rem;
   min-height: 44px;
-  transition: all 0.25s ease;
+  transition: background 0.25s ease, color 0.25s ease, border-color 0.25s ease;
   background: transparent;
   color: rgba(255, 255, 255, 0.7);
   border: 1px solid rgba(255, 255, 255, 0.15);
@@ -912,14 +934,14 @@ header p {
 
 /* Budget Save Button */
 #saveBudgetBtn {
-  background: linear-gradient(135deg, var(--primary-start), var(--primary-end));
+  background: var(--primary-gradient);
   color: white;
   border: none;
   border-radius: 10px;
   font-weight: 700;
   padding: 12px 24px;
   min-height: 44px;
-  transition: all 0.25s ease;
+  transition: transform 0.25s ease, box-shadow 0.25s ease;
   box-shadow: 0 4px 16px rgba(102, 126, 234, 0.25);
   cursor: pointer;
 }
@@ -938,7 +960,7 @@ header p {
   font-weight: 600;
   padding: 12px 24px;
   min-height: 44px;
-  transition: all 0.25s ease;
+  transition: transform 0.25s ease, box-shadow 0.25s ease;
   box-shadow: 0 4px 16px rgba(14, 165, 233, 0.2);
 }
 
@@ -1101,20 +1123,8 @@ h4.text-white {
   font-family: var(--font-sans);
   font-weight: 700;
   letter-spacing: -0.3px;
-  position: relative;
-  padding-left: 16px;
-}
-
-.section-heading::before,
-h4.text-white::before {
-  content: '';
-  position: absolute;
-  left: 0;
-  top: 4px;
-  bottom: 4px;
-  width: 4px;
-  border-radius: 4px;
-  background: linear-gradient(to bottom, var(--primary-start), var(--primary-end));
+  border-left: 4px solid var(--primary);
+  padding-left: 1rem;
 }
 
 /* ── Budget Progress ── */
@@ -1300,12 +1310,12 @@ body.dark-mode .table-striped > tbody > tr:nth-of-type(odd) > * {
 /* ── Modal Save Button ── */
 
 .modal-footer .btn-primary {
-  background: linear-gradient(135deg, var(--primary-start), var(--primary-end));
+  background: var(--primary-gradient);
   border: none;
   border-radius: 10px;
   padding: 10px 24px;
   font-weight: 700;
-  transition: all var(--transition-med);
+  transition: transform var(--transition-med), box-shadow var(--transition-med);
 }
 
 .modal-footer .btn-primary:hover {
@@ -1338,7 +1348,7 @@ body.dark-mode .table-striped > tbody > tr:nth-of-type(odd) > * {
   color: rgba(255, 255, 255, 0.7);
   font-weight: 600;
   padding: 8px 16px;
-  transition: all var(--transition-fast);
+  transition: background var(--transition-fast), color var(--transition-fast), border-color var(--transition-fast), transform var(--transition-fast);
 }
 
 .page-link:hover {
@@ -1490,10 +1500,7 @@ body.dark-mode .card-header {
 }
 
 body.dark-mode .card .card-body span#totalBalance {
-  background: linear-gradient(135deg, #8b9aff, #c084fc);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
+  color: #8b9aff;
 }
 
 body.dark-mode .table {

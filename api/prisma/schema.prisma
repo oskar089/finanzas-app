@@ -24,12 +24,13 @@ model User {
   updatedAt       DateTime  @updatedAt @map("updated_at")
 
   // Relations
-  accounts      Account[]
-  transactions  Transaction[]
-  budgets       Budget[]
-  categories    Category[]
-  familyMembers FamilyMember[]
-  familyAdmin   FamilyGroup[]  @relation("FamilyAdmin")
+  accounts       Account[]
+  transactions   Transaction[]
+  budgets        Budget[]
+  categories     Category[]
+  familyMembers  FamilyMember[]
+  familyAdmin    FamilyGroup[]  @relation("FamilyAdmin")
+  refreshTokens  RefreshToken[]
 
   @@map("users")
 }

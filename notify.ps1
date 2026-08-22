@@ -23,8 +23,13 @@ param(
     [string]$ParseMode = "HTML"
 )
 
-$BOT_TOKEN = "8886676356:AAHaTRdIM467vT8zw5Hi1XJvFKViQQKGh3Y"
-$CHAT_ID   = "1803817455"
+$BOT_TOKEN = $env:TELEGRAM_BOT_TOKEN
+$CHAT_ID   = $env:TELEGRAM_CHAT_ID
+
+if (-not $BOT_TOKEN -or -not $CHAT_ID) {
+    Write-Host "❌ Faltan variables de entorno: TELEGRAM_BOT_TOKEN y TELEGRAM_CHAT_ID" -ForegroundColor Red
+    exit 1
+}
 
 $url = "https://api.telegram.org/bot$BOT_TOKEN/sendMessage"
 $body = @{

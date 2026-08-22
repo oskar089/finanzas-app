@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { z } from "zod";
 import prisma from "../lib/prisma.js";
 import {
   createTransactionSchema,
@@ -8,6 +9,12 @@ import {
 import { ApiError } from "../middleware/errorHandler.js";
 
 const router = Router();
+
+// CSV imports arrive as one array; cap it so a huge file cannot hold a single
+// interactive Prisma transaction open indefinitely.
+const bulkCreateSchema = z.object({
+  transactions: z.array(createTransactionSchema).min(1).max(1000),
+});
 
 /**
  * Calculate the balance effect of a transaction on its account.
@@ -34,17 +41,19 @@ router.get("/", async (req, res, next) => {
       ...(query.type && { type: query.type }),
       ...(query.category && { category: query.category }),
       ...(query.accountId && { accountId: query.accountId }),
-      ...(query.startDate && {
-        date: { gte: new Date(query.startDate) },
+      // Range bounds must nest inside ONE object per field: sibling conditional
+      // spreads at the top level would replace each other instead of merging.
+      ...((query.startDate || query.endDate) && {
+        date: {
+          ...(query.startDate && { gte: new Date(query.startDate) }),
+          ...(query.endDate && { lte: new Date(query.endDate) }),
+        },
       }),
-      ...(query.endDate && {
-        date: { lte: new Date(query.endDate) },
-      }),
-      ...(query.minAmount && {
-        amount: { gte: query.minAmount },
-      }),
-      ...(query.maxAmount && {
-        amount: { lte: query.maxAmount },
+      ...((query.minAmount || query.maxAmount) && {
+        amount: {
+          ...(query.minAmount && { gte: query.minAmount }),
+          ...(query.maxAmount && { lte: query.maxAmount }),
+        },
       }),
       ...(query.concept && {
         description: {
@@ -203,6 +212,18 @@ router.put("/:id", async (req, res, next) => {
       updateData.date = new Date(updateData.date);
     }
 
+    // IDOR protection: if the destination account changed, verify it exists and
+    // belongs to the requesting user before any balance is moved into it.
+    // Mirrors POST and bulk (404, no existence disclosure).
+    if (accountChanged) {
+      const targetAccount = await prisma.account.findFirst({
+        where: { id: validatedData.accountId, userId: req.user.id },
+      });
+      if (!targetAccount) {
+        throw new ApiError(404, "Account not found");
+      }
+    }
+
     // Interactive $transaction handles account changes atomically:
     // if accountId changed → restore old account + adjust new account
     // if same account → apply net delta
@@ -289,16 +310,19 @@ router.delete("/:id", async (req, res, next) => {
  */
 router.post("/bulk", async (req, res, next) => {
   try {
-    const { transactions: rawTransactions } = req.body;
+    const { transactions: validatedTransactions } = bulkCreateSchema.parse(req.body);
 
-    if (!Array.isArray(rawTransactions) || rawTransactions.length === 0) {
-      throw new ApiError(400, "Transactions array is required");
+    // IDOR protection: batch-verify that every referenced account belongs to
+    // the requesting user before creating transactions or updating balances.
+    // Mirrors the single-create POST handler (404, no existence disclosure).
+    const accountIds = [...new Set(validatedTransactions.map((t) => t.accountId))];
+    const ownedAccounts = await prisma.account.findMany({
+      where: { id: { in: accountIds }, userId: req.user.id },
+      select: { id: true },
+    });
+    if (ownedAccounts.length !== accountIds.length) {
+      throw new ApiError(404, "Account not found");
     }
-
-    // Validate all transactions
-    const validatedTransactions = rawTransactions.map((t) =>
-      createTransactionSchema.parse(t)
-    );
 
     // Create all transactions in a single transaction
     const result = await prisma.$transaction(async (tx) => {

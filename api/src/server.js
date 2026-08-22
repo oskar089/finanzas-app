@@ -1,10 +1,14 @@
+// Load environment variables FIRST: ESM static imports below are hoisted and
+// evaluated before any module-body code, so modules that read env at top level
+// (config/passport.js) would otherwise see undefined values when configured
+// via .env.
+import "dotenv/config";
 import express from "express";
 import cors from "cors";
 import helmet from "helmet";
 import rateLimit from "express-rate-limit";
 import cookieParser from "cookie-parser";
 import crypto from "crypto";
-import dotenv from "dotenv";
 import path from "path";
 import { fileURLToPath } from "url";
 import passport from "passport";
@@ -12,9 +16,6 @@ import "./config/passport.js"; // Initialize Passport strategies
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const FRONTEND_PATH = path.join(__dirname, "..", "..");
-
-// Load environment variables
-dotenv.config();
 
 // Validate required secrets at startup
 if (!process.env.JWT_SECRET) {
@@ -97,13 +98,17 @@ app.use(
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
   max: 500, // Limit each IP to 500 requests per windowMs
-  message: "Too many requests from this IP, please try again later.",
+  handler: (_req, res) => {
+    res.status(429).json({ error: "Too many requests from this IP, please try again later." });
+  },
 });
 
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 100, // Stricter limit for auth endpoints
-  message: "Too many authentication attempts, please try again later.",
+  handler: (_req, res) => {
+    res.status(429).json({ error: "Too many authentication attempts, please try again later." });
+  },
 });
 
 app.use("/api/", limiter);
@@ -124,12 +129,6 @@ app.use(cookieParser());
 app.use(passport.initialize());
 
 // ============================================================
-// STATIC FILES (Frontend)
-// ============================================================
-
-app.use(express.static(FRONTEND_PATH));
-
-// ============================================================
 // ROUTES
 // ============================================================
 
@@ -146,6 +145,31 @@ app.use("/api/budgets", authenticate, budgetRoutes);
 app.use("/api/dashboard", authenticate, dashboardRoutes);
 app.use("/api/family", authenticate, familyRoutes);
 app.use("/api/categories", authenticate, categoryRoutes);
+
+// ============================================================
+// STATIC FILES (Frontend)
+// ============================================================
+
+// Block source/config paths from static fallback (API routes above already handled /api/*)
+const BLOCKED_STATIC_PREFIXES = [
+  /^\/api(\/|$)/,
+  /^\/node_modules/,
+  /^\/prisma/,
+  /^\/\.env/,
+  /^\/\.git/,
+  /^\/\.atl/,
+  /^\/openspec/,
+  /^\/\.github/,
+];
+
+app.use((req, res, next) => {
+  if (BLOCKED_STATIC_PREFIXES.some((re) => re.test(req.path))) {
+    return res.status(404).end();
+  }
+  next();
+});
+
+app.use(express.static(FRONTEND_PATH, { dotfiles: "ignore" }));
 
 // 404 handler
 app.use((req, res) => {

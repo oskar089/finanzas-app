@@ -5,7 +5,7 @@
 const API_BASE = "/api";
 
 // ============================================================
-// AUTH HELPERS
+// AUTH HELPERS (internal — not exported)
 // ============================================================
 
 function getToken() {
@@ -14,10 +14,6 @@ function getToken() {
 
 function clearToken() {
   localStorage.removeItem("token");
-}
-
-function isLoggedIn() {
-  return !!getToken();
 }
 
 // ============================================================
@@ -357,7 +353,6 @@ export {
   logout,
   loginWithGoogle,
   loginWithApple,
-  isLoggedIn,
   // Accounts
   getAccounts,
   getAccount,

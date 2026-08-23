@@ -150,7 +150,7 @@ router.post("/:id/invite", async (req, res, next) => {
     const { id } = req.params;
 
     // Check if family exists and user is admin
-    const family = await requireAdmin(id, req.user.id);
+    await requireAdmin(id, req.user.id);
 
     const validatedData = inviteMemberSchema.parse(req.body);
 
@@ -222,7 +222,7 @@ router.delete("/:id/members/:memberId", async (req, res, next) => {
     const { id, memberId } = req.params;
 
     // Check if family exists and user is admin
-    const family = await requireAdmin(id, req.user.id);
+    await requireAdmin(id, req.user.id);
 
     // Check if member exists
     const member = await prisma.familyMember.findFirst({
@@ -265,7 +265,7 @@ router.put("/:id/members/:memberId/role", async (req, res, next) => {
     const { role } = updateMemberRoleSchema.parse(req.body);
 
     // Check if family exists and user is admin
-    const family = await requireAdmin(id, req.user.id);
+    await requireAdmin(id, req.user.id);
 
     // Check if member exists
     const member = await prisma.familyMember.findFirst({
@@ -321,7 +321,7 @@ router.delete("/:id", async (req, res, next) => {
     const { id } = req.params;
 
     // Check if family exists and user is admin
-    const family = await requireAdmin(id, req.user.id);
+    await requireAdmin(id, req.user.id);
 
     // Delete family (cascade will delete members)
     await prisma.familyGroup.delete({

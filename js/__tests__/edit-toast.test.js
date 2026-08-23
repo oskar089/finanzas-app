@@ -24,9 +24,6 @@ vi.mock("../api.js", () => ({
   logout: vi.fn(),
   loginWithGoogle: vi.fn(),
   loginWithApple: vi.fn(),
-  isLoggedIn: vi.fn(() => false),
-  getToken: vi.fn(() => null),
-  clearToken: vi.fn(),
   getAccounts: vi.fn(),
   getAccount: vi.fn(),
   createAccount: vi.fn(),
@@ -66,6 +63,7 @@ import {
   getTransactions,
   createTransaction,
   updateTransaction,
+  getMe,
 } from "../api.js";
 
 const ACCOUNTS = [

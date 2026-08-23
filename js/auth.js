@@ -1,4 +1,4 @@
-import { register, login, logout, isLoggedIn, getMe, loginWithGoogle, loginWithApple } from "./api.js";
+import { register, login, logout, getMe, loginWithGoogle, loginWithApple } from "./api.js";
 
 // ============================================================
 // DOM ELEMENTS
@@ -157,15 +157,14 @@ async function showMainApp() {
 }
 
 async function checkAuth() {
-  if (isLoggedIn()) {
-    try {
-      await getMe();
-      showMainApp();
-    } catch {
-      // Token invalid or expired
-      logout();
-    }
-  } else {
+  try {
+    await getMe();
+    showMainApp();
+  } catch {
+    // No valid session (cookie expired, missing, or invalid).
+    // Do local cleanup ONLY — do NOT call server /auth/logout for unauthenticated visitors.
+    // This mirrors logout() semantics without the remote call.
+    localStorage.removeItem("token");
     authScreen.classList.remove("d-none");
     mainApp.classList.add("d-none");
   }

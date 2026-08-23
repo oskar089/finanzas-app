@@ -32,12 +32,12 @@ describe("actualizarChartMensual — error toast on API failure", () => {
 
     // The catch block from app.js does:
     //   console.error("Error loading monthly data:", err);
-    //   showToast("Error al cargar el gráfico mensual", "error");
-    showToastSpy("Error al cargar el gráfico mensual", "error");
+    //   showToast("Error al cargar el gráfico mensual", "danger");
+    showToastSpy("Error al cargar el gráfico mensual", "danger");
 
     expect(showToastSpy).toHaveBeenCalledWith(
       "Error al cargar el gráfico mensual",
-      "error",
+      "danger",
     );
     expect(showToastSpy).toHaveBeenCalledTimes(1);
   });
@@ -51,7 +51,7 @@ describe("actualizarChartMensual — error toast on API failure", () => {
     // This is what actualizarChartMensual does:
     //   .catch((err) => {
     //     console.error("Error loading monthly data:", err);
-    //     showToast("Error al cargar el gráfico mensual", "error");
+    //     showToast("Error al cargar el gráfico mensual", "danger");
     //   });
     const fakeError = new Error("API unavailable");
     const showToastSpy = vi.fn();
@@ -59,13 +59,13 @@ describe("actualizarChartMensual — error toast on API failure", () => {
     // Simulate the catch block in isolation (no DOM dependency)
     const catchBlock = (err) => {
       console.error("Error loading monthly data:", err);
-      showToastSpy("Error al cargar el gráfico mensual", "error");
+      showToastSpy("Error al cargar el gráfico mensual", "danger");
     };
 
     expect(() => catchBlock(fakeError)).not.toThrow();
     expect(showToastSpy).toHaveBeenCalledWith(
       "Error al cargar el gráfico mensual",
-      "error",
+      "danger",
     );
   });
 });

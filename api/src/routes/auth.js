@@ -333,6 +333,12 @@ router.get(
   handleOAuthCallback("apple")
 );
 
+// Computed once at startup with the same cost factor as real password
+// hashes. Unknown-email logins run a bcrypt compare against it so both
+// failure paths cost comparable time; otherwise response latency would
+// reveal which emails are registered.
+const DUMMY_HASH = await bcrypt.hash("timing-parity-placeholder", 12);
+
 /**
  * POST /api/auth/login
  * Login user — sets JWT and refresh token as HttpOnly cookies.
@@ -346,6 +352,8 @@ router.post("/login", async (req, res, next) => {
     });
 
     if (!user) {
+      // Keep bcrypt work on par with the wrong-password path below.
+      await bcrypt.compare(validatedData.password, DUMMY_HASH);
       throw new ApiError(401, "Invalid email or password");
     }
 

@@ -21,6 +21,10 @@ import {
   showConfirm,
   formatCurrency,
   formatCurrencyIn,
+  buildCsvRow,
+  parseDelimited,
+  exceedsBulkLimit,
+  BULK_IMPORT_MAX_ROWS,
 } from "./shared.js";
 import { loadBudgets, poblarBudgetCategorias } from "./budgets.js";
 import { loadGroups } from "./family.js";
@@ -363,11 +367,19 @@ function exportCSV() {
     return;
   }
 
+  // Every field is quoted (RFC 4180) so ';' or newlines inside a concept
+  // cannot corrupt the column layout of the export.
   const lineas = [
-    "Fecha;Tipo;Categoría;Concepto;Monto",
+    buildCsvRow(["Fecha", "Tipo", "Categoría", "Concepto", "Monto"]),
     ...movimientos.map((m) => {
       const signo = (m.type || m.tipo || "").toLowerCase() === "income" ? "" : "-";
-      return `${m.date?.split("T")[0] || m.fecha};${m.type || m.tipo};${m.category || m.categoria};${m.description || m.concepto};${signo}${m.amount || m.monto}`;
+      return buildCsvRow([
+        m.date?.split("T")[0] || m.fecha,
+        m.type || m.tipo,
+        m.category || m.categoria,
+        m.description || m.concepto,
+        `${signo}${m.amount || m.monto}`,
+      ]);
     }),
   ];
 
@@ -839,6 +851,17 @@ fileInput.addEventListener("change", async (e) => {
       return;
     }
 
+    // Reject oversized files before hitting the API — the bulk endpoint
+    // rejects >1000 rows server-side anyway (bulkCreateSchema .max).
+    if (exceedsBulkLimit(resultado.movimientos.length)) {
+      showToast(
+        `El archivo supera el límite de ${BULK_IMPORT_MAX_ROWS} movimientos por importación. Dividilo en archivos más pequeños.`,
+        "warning",
+      );
+      fileInput.value = "";
+      return;
+    }
+
     try {
       const transactions = resultado.movimientos.map((m) => ({
         description: m.concepto,
@@ -877,23 +900,31 @@ fileInput.addEventListener("change", async (e) => {
 });
 
 function parsearCSV(texto) {
-  const lineas = texto.split(/\r?\n/).filter((l) => l.trim() !== "");
+  // Use RFC-4180 compliant parser (handles quoted fields, embedded delimiters,
+  // newlines inside quotes, doubled-quote escaping, CRLF/LF).
+  // parseDelimited returns array of rows, each row is array of fields.
+  const rows = parseDelimited(texto);
   const errores = [];
 
-  if (lineas.length > 0) {
-    lineas[0] = lineas[0].replace(/^\uFEFF/, "");
+  // Strip BOM from first cell of first row if present
+  if (rows.length > 0 && rows[0].length > 0) {
+    rows[0][0] = rows[0][0].replace(/^\uFEFF/, "");
   }
 
-  const movimientosNuevos = lineas.slice(1).reduce((acc, linea, idx) => {
-    const numLinea = idx + 2;
-    const partes = linea.split(";");
+  // Expect header row + data rows; need at least 2 rows total
+  if (rows.length < 2) {
+    return { movimientos: [], errores: [{ linea: 1, razon: "Archivo vacío o solo encabezado" }] };
+  }
 
-    if (partes.length < 5) {
+  const movimientosNuevos = rows.slice(1).reduce((acc, campos, idx) => {
+    const numLinea = idx + 2; // 1-based, accounting for header
+
+    if (campos.length < 5) {
       errores.push({ linea: numLinea, razon: "Faltan columnas" });
       return acc;
     }
 
-    const [fecha, tipoRaw, categoria, concepto, montoStr] = partes;
+    const [fecha, tipoRaw, categoria, concepto, montoStr] = campos;
     const tipo = tipoRaw.trim().toLowerCase();
     const categoriaLimpia = categoria.trim().toLowerCase();
 
@@ -1137,7 +1168,7 @@ function actualizarChartMensual() {
     })
     .catch((err) => {
       console.error("Error loading monthly data:", err);
-      showToast("Error al cargar el gráfico mensual", "error");
+      showToast("Error al cargar el gráfico mensual", "danger");
     });
 }
 

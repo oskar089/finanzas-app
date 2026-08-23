@@ -12,4 +12,4 @@ MODE=staged
 CACHE=true
 
 # Max seconds to wait for the AI provider review response
-TIMEOUT=900
+TIMEOUT=1800

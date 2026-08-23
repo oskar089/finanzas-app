@@ -25,7 +25,10 @@ export const authenticate = async (req, res, next) => {
       return res.status(401).json({ error: "No token provided" });
     }
 
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    // Algorithm pinned to match signing (prevents algorithm-confusion attacks)
+    const decoded = jwt.verify(token, process.env.JWT_SECRET, {
+      algorithms: ["HS256"],
+    });
 
     // Get user from database
     const user = await prisma.user.findUnique({
@@ -61,6 +64,7 @@ export const authenticate = async (req, res, next) => {
  */
 export const generateToken = (userId) => {
   return jwt.sign({ userId }, process.env.JWT_SECRET, {
+    algorithm: "HS256",
     expiresIn: process.env.JWT_EXPIRES_IN || "15m",
   });
 };
@@ -118,41 +122,44 @@ export const verifyRefresh = async (rawToken) => {
 };
 
 /**
- * Rotate a refresh token: invalidate old, issue new pair.
- * If the old token was already rotated (theft detection), invalidate all tokens in family.
+ * Rotate a refresh token: atomically consume the old one, issue new pair.
+ * Consumption is a single atomic DELETE guarded by both id and stored hash,
+ * so concurrent requests presenting the same token cannot double-issue:
+ * only the first deleteMany wins (count === 1); losers get count === 0 and
+ * are treated as token reuse. Reuse revokes the entire token family.
  */
 export const rotateRefresh = async (oldTokenRecord, rawOldToken) => {
-  const { userId, id, familyId } = oldTokenRecord;
+  const { userId, id, familyId, token } = oldTokenRecord;
 
-  // Check if this token was already rotated (stolen token detection)
-  const alreadyRotated = await prisma.refreshToken.findFirst({
-    where: {
-      familyId,
-      // A rotated token's family has a newer token with same familyId
-      // If the old token is still valid but there's a newer one, it's been reused
-    },
-    orderBy: { createdAt: "desc" },
-  });
-
-  // If the matched record is NOT the latest in its family, it's a reuse attempt
+  // Defense-in-depth reuse check: if the matched record is NOT the latest
+  // in its family, it was already rotated once — reuse attempt.
   const latestInFamily = await prisma.refreshToken.findFirst({
     where: { familyId },
     orderBy: { createdAt: "desc" },
   });
 
-  if (latestInFamily && latestInFamily.id !== id) {
-    // Theft detection: this token was already rotated
-    // Invalidate ALL tokens for this user
+  if (!latestInFamily || latestInFamily.id !== id) {
+    // Theft detection: revoke every token in this family.
     await prisma.refreshToken.deleteMany({
-      where: { userId },
+      where: { familyId },
     });
     return { theftDetected: true };
   }
 
-  // Invalidate the old token
-  await prisma.refreshToken.delete({
-    where: { id },
+  // Atomic one-time consumption. If count is 0, a concurrent request already
+  // consumed this exact record (same id + same hash) — treat as reuse.
+  const claimed = await prisma.refreshToken.deleteMany({
+    where: { id, token },
   });
+
+  if (claimed.count === 0) {
+    // Concurrent rotation detected — revoke the family so at most one
+    // new pair can ever survive.
+    await prisma.refreshToken.deleteMany({
+      where: { familyId },
+    });
+    return { theftDetected: true };
+  }
 
   // Issue new pair within same family
   const rawToken = crypto.randomBytes(48).toString("hex");
@@ -163,11 +170,27 @@ export const rotateRefresh = async (oldTokenRecord, rawOldToken) => {
       userId,
       token: hashedToken,
       familyId,
-      expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+      expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days
     },
   });
 
   return { rawToken, familyId, theftDetected: false };
+};
+
+/**
+ * Best-effort revocation of the refresh-token family that a raw token
+ * belongs to. Returns true when a matching token was found and its
+ * whole family was revoked; false when nothing matched.
+ */
+export const revokeRefreshFamily = async (rawToken) => {
+  const tokenRecord = await verifyRefresh(rawToken);
+  if (!tokenRecord) {
+    return false;
+  }
+  await prisma.refreshToken.deleteMany({
+    where: { familyId: tokenRecord.familyId },
+  });
+  return true;
 };
 
 /**

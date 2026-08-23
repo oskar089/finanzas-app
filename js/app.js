@@ -15,7 +15,13 @@ import {
   updateCategory,
   deleteCategory,
 } from "./api.js";
-import { escapeHTML, showToast, showConfirm, formatCurrency } from "./shared.js";
+import {
+  escapeHTML,
+  showToast,
+  showConfirm,
+  formatCurrency,
+  formatCurrencyIn,
+} from "./shared.js";
 import { loadBudgets, poblarBudgetCategorias } from "./budgets.js";
 import { loadGroups } from "./family.js";
 
@@ -80,6 +86,16 @@ let currentPage = 1;
 let pageSize = 20;
 let pagination = null;
 
+// Request lifecycle for list + aggregation fetches (latest request wins)
+let movimientosAbortController = null;
+
+// Backend caps limit at 100 — full-dataset aggregation pages through at this size
+const AGGREGATE_PAGE_SIZE = 100;
+const AGGREGATE_MAX_PAGES = 500;
+
+// Debounce window for filter inputs (ms)
+const FILTER_DEBOUNCE_MS = 300;
+
 // ============================================================
 // LOAD DATA FROM API
 // ============================================================
@@ -88,11 +104,22 @@ async function loadCuentas() {
   try {
     const data = await getAccounts();
     cuentas = data.accounts || data;
+
+    // Reset the selection if the selected account no longer exists
+    if (selectedAccountId && !cuentas.some((c) => c.id === selectedAccountId)) {
+      selectedAccountId = null;
+    }
+    // Default to the first account so new movements always have a valid target
+    if (!selectedAccountId && cuentas.length > 0) {
+      selectedAccountId = cuentas[0].id;
+    }
+
     accountSelect.innerHTML =
-      '<option value="">Sin cuenta</option>' +
+      '<option value="">Todas las cuentas</option>' +
       cuentas
         .map((c) => `<option value="${c.id}">${escapeHTML(c.name)}</option>`)
         .join("");
+    accountSelect.value = selectedAccountId || "";
     renderAccountList();
   } catch (err) {
     console.error("Error loading accounts:", err);
@@ -100,33 +127,75 @@ async function loadCuentas() {
   }
 }
 
+// Build query params shared by the paginated list and the full aggregation
+function buildTransactionParams() {
+  const params = {
+    sortBy: sortColumn,
+    sortOrder: sortDirection,
+  };
+
+  if (filterTipo !== "todos") params.type = filterTipo.toUpperCase();
+  if (filterCategoria !== "todas") params.category = filterCategoria;
+  if (selectedAccountId) params.accountId = selectedAccountId;
+  if (filterFechaDesde) params.startDate = filterFechaDesde;
+  if (filterFechaHasta) params.endDate = filterFechaHasta;
+  if (filterMontoMin) params.minAmount = Number(String(filterMontoMin).replace(",", "."));
+  if (filterMontoMax) params.maxAmount = Number(String(filterMontoMax).replace(",", "."));
+  if (filterConcepto) params.concept = filterConcepto;
+
+  return params;
+}
+
+// Fetch EVERY page matching the current filters so dashboard totals and
+// charts are computed from the complete dataset, not just the visible page.
+async function fetchAllMatchingTransactions(signal) {
+  const baseParams = buildTransactionParams();
+  const todasLasCoincidencias = [];
+  let page = 1;
+  let totalPages = 1;
+
+  do {
+    const data = await getTransactions(
+      { ...baseParams, page, limit: AGGREGATE_PAGE_SIZE },
+      { signal },
+    );
+    todasLasCoincidencias.push(...(data.transactions || []));
+    totalPages = data.pagination?.totalPages || 1;
+    page += 1;
+  } while (page <= totalPages && page <= AGGREGATE_MAX_PAGES && !signal.aborted);
+
+  return todasLasCoincidencias;
+}
+
 async function loadMovimientos() {
+  // Supersede any in-flight list/aggregation request (latest request wins)
+  if (movimientosAbortController) movimientosAbortController.abort();
+  movimientosAbortController = new AbortController();
+  const { signal } = movimientosAbortController;
+
   try {
-    const params = {
-      sortBy: sortColumn,
-      sortOrder: sortDirection,
-      page: currentPage,
-      limit: pageSize,
-    };
+    const data = await getTransactions(
+      { ...buildTransactionParams(), page: currentPage, limit: pageSize },
+      { signal },
+    );
+    if (signal.aborted) return;
 
-    if (filterTipo !== "todos") params.type = filterTipo.toUpperCase();
-    if (filterCategoria !== "todas") params.category = filterCategoria;
-    if (filterFechaDesde) params.startDate = filterFechaDesde;
-    if (filterFechaHasta) params.endDate = filterFechaHasta;
-    if (filterMontoMin) params.minAmount = Number(String(filterMontoMin).replace(",", "."));
-    if (filterMontoMax) params.maxAmount = Number(String(filterMontoMax).replace(",", "."));
-    if (filterConcepto) params.concept = filterConcepto;
-
-    const data = await getTransactions(params);
     movimientos = data.transactions || data;
     pagination = data.pagination || null;
 
     renderMovimientos();
     renderPagination();
-    actualizarBalance();
-    actualizarChartGastos();
+
+    // Balance and charts need the COMPLETE matching dataset
+    const todasLasCoincidencias = await fetchAllMatchingTransactions(signal);
+    if (signal.aborted) return;
+
+    actualizarBalance(todasLasCoincidencias);
+    actualizarChartGastos(todasLasCoincidencias);
     actualizarChartMensual();
   } catch (err) {
+    // Aborted requests were superseded by a newer one — not an error
+    if (err?.name === "AbortError" || signal.aborted) return;
     console.error("Error loading transactions:", err);
     showToast("Error al cargar movimientos", "danger");
   }
@@ -258,13 +327,30 @@ function renderMovimientos() {
     .join("");
 }
 
-function actualizarBalance() {
-  const total = movimientos.reduce((acc, m) => {
-    const amount = m.amount || m.monto || 0;
+// Resolve a transaction's currency via its account — currency lives on the
+// account, so we look it up from the loaded accounts list.
+function getMonedaDeMovimiento(movimiento) {
+  const cuenta = cuentas.find((c) => c.id === movimiento.accountId);
+  return cuenta?.currency || movimiento.currency || movimiento.moneda || "USD";
+}
+
+function actualizarBalance(allMovimientos) {
+  // Per-currency subtotals — currencies are never summed together
+  const saldoPorMoneda = allMovimientos.reduce((acc, m) => {
+    const amount = Number(m.amount || m.monto || 0);
     const type = (m.type || m.tipo || "").toLowerCase();
-    return type === "income" || type === "ingreso" ? acc + amount : acc - amount;
-  }, 0);
-  balanceSpan.textContent = `Balance: ${formatCurrency(total)}`;
+    const ingreso = type === "income" || type === "ingreso";
+    const moneda = getMonedaDeMovimiento(m);
+    return { ...acc, [moneda]: (acc[moneda] || 0) + (ingreso ? amount : -amount) };
+  }, {});
+
+  const subtotales = Object.entries(saldoPorMoneda).map(([moneda, total]) =>
+    formatCurrencyIn(total, moneda),
+  );
+
+  balanceSpan.textContent = `Balance: ${
+    subtotales.length > 0 ? subtotales.join(" · ") : formatCurrency(0)
+  }`;
 }
 
 // ============================================================
@@ -349,7 +435,7 @@ async function renderAccountList() {
         <tr>
           <td>${escapeHTML(c.name)}</td>
           <td>${escapeHTML(c.type)}</td>
-          <td>${formatCurrency(Number(c.balance))}</td>
+          <td>${formatCurrencyIn(Number(c.balance), c.currency || "USD")}</td>
           <td>${escapeHTML(c.currency || "USD")}</td>
           <td>
             <button class="btn-editar btn-edit-account" data-id="${escapeHTML(c.id)}">Editar</button>
@@ -372,6 +458,12 @@ function toggleManageAccounts() {
 }
 
 btnManageAccounts.addEventListener("click", toggleManageAccounts);
+
+// Changing the selected account drives list filtering and new-movement booking
+accountSelect.addEventListener("change", (e) => {
+  selectedAccountId = e.target.value || null;
+  scheduleAplicarFiltros();
+});
 
 async function handleAccountSubmit(e) {
   e.preventDefault();
@@ -605,40 +697,46 @@ function aplicarFiltros() {
   loadMovimientos();
 }
 
+// Debounce rapid filter changes; combined with the AbortController in
+// loadMovimientos, stale responses can never overwrite fresh ones.
+function scheduleAplicarFiltros() {
+  clearTimeout(filterDebounceTimer);
+  filterDebounceTimer = setTimeout(aplicarFiltros, FILTER_DEBOUNCE_MS);
+}
+
 document.getElementById("filterTipo").addEventListener("change", (e) => {
   filterTipo = e.target.value;
-  aplicarFiltros();
+  scheduleAplicarFiltros();
 });
 
 document.getElementById("filterFechaDesde").addEventListener("change", (e) => {
   filterFechaDesde = e.target.value;
-  aplicarFiltros();
+  scheduleAplicarFiltros();
 });
 
 document.getElementById("filterFechaHasta").addEventListener("change", (e) => {
   filterFechaHasta = e.target.value;
-  aplicarFiltros();
+  scheduleAplicarFiltros();
 });
 
 document.getElementById("filterMontoMin").addEventListener("input", (e) => {
   filterMontoMin = e.target.value;
-  aplicarFiltros();
+  scheduleAplicarFiltros();
 });
 
 document.getElementById("filterMontoMax").addEventListener("input", (e) => {
   filterMontoMax = e.target.value;
-  aplicarFiltros();
+  scheduleAplicarFiltros();
 });
 
 document.getElementById("filterConcepto").addEventListener("input", (e) => {
   filterConcepto = e.target.value;
-  clearTimeout(filterDebounceTimer);
-  filterDebounceTimer = setTimeout(aplicarFiltros, 300);
+  scheduleAplicarFiltros();
 });
 
 document.getElementById("filterCategoria").addEventListener("change", (e) => {
   filterCategoria = e.target.value;
-  aplicarFiltros();
+  scheduleAplicarFiltros();
 });
 
 // ============================================================
@@ -831,20 +929,29 @@ function parsearCSV(texto) {
 let chartGastos = null;
 let chartMensual = null;
 
-function actualizarChartGastos() {
-  const gastosPorCategoria = movimientos
-    .filter((m) => (m.type || m.tipo || "").toLowerCase() === "expense")
-    .reduce(
-      (acc, m) => ({
-        ...acc,
-        [m.category || m.categoria]:
-          (acc[m.category || m.categoria] || 0) + (m.amount || m.monto),
-      }),
-      {},
-    );
+function actualizarChartGastos(allMovimientos) {
+  // Group expenses by category AND currency — never sum across currencies.
+  // Keys use "category||currency" to keep each currency bucket separate.
+  const gastosPorCategoriaMoneda = allMovimientos.reduce((acc, m) => {
+    const type = (m.type || m.tipo || "").toLowerCase();
+    if (type !== "expense") return acc;
+    const cat = m.category || m.categoria;
+    const moneda = getMonedaDeMovimiento(m);
+    const key = `${cat}||${moneda}`;
+    return { ...acc, [key]: (acc[key] || 0) + Number(m.amount || m.monto || 0) };
+  }, {});
 
-  const labels = Object.keys(gastosPorCategoria).map(getEtiquetaCategoria);
-  const data = Object.values(gastosPorCategoria);
+  const monedas = new Set(
+    Object.keys(gastosPorCategoriaMoneda).map((k) => k.split("||")[1]),
+  );
+
+  // Suffix categories with their currency only when several currencies coexist
+  const labels = Object.keys(gastosPorCategoriaMoneda).map((key) => {
+    const [cat, moneda] = key.split("||");
+    const etiqueta = getEtiquetaCategoria(cat);
+    return monedas.size > 1 ? `${etiqueta} (${moneda})` : etiqueta;
+  });
+  const data = Object.values(gastosPorCategoriaMoneda);
 
   // Palette profesional — matchea el theme indigo/purple
   const PALETTE = [
@@ -853,8 +960,9 @@ function actualizarChartGastos() {
   ];
   let colorIdx = 0;
 
-  const backgroundColor = Object.keys(gastosPorCategoria).map((catName) => {
+  const backgroundColor = Object.keys(gastosPorCategoriaMoneda).map((key) => {
     // Usar el color de la categoría en DB si existe
+    const catName = key.split("||")[0];
     const dbCat = categorias.find(
       (c) => c.name === catName || c.id === catName,
     );
@@ -1030,6 +1138,17 @@ function actualizarChartMensual() {
 // ============================================================
 // INIT
 // ============================================================
+
+// Surface OAuth errors persisted by auth/callback.html, then consume the key
+try {
+  const oauthError = sessionStorage.getItem("oauth_error");
+  if (oauthError) {
+    sessionStorage.removeItem("oauth_error");
+    showToast(`Error de autenticación externa: ${oauthError}`, "danger");
+  }
+} catch {
+  // sessionStorage unavailable (e.g. privacy mode) — nothing to surface
+}
 
 window.addEventListener("auth:ready", async () => {
   await loadCuentas();

@@ -138,6 +138,18 @@ export const updateBudgetSchema = z.object({
   year: z.number().int().min(2020).max(2030).optional(),
 });
 
+export const budgetQuerySchema = z.object({
+  month: z.coerce.number().int().min(1).max(12).optional(),
+  year: z.coerce.number().int().min(2020).max(2030).optional(),
+});
+
+export const budgetCopySchema = z.object({
+  fromMonth: z.coerce.number().int().min(1).max(12),
+  fromYear: z.coerce.number().int().min(2020).max(2030),
+  toMonth: z.coerce.number().int().min(1).max(12),
+  toYear: z.coerce.number().int().min(2020).max(2030),
+});
+
 // ============================================================
 // FAMILY SCHEMAS
 // ============================================================
@@ -149,6 +161,10 @@ export const createFamilySchema = z.object({
 export const inviteMemberSchema = z.object({
   email: z.string().email("Invalid email format"),
   role: z.enum(["MEMBER", "VIEWER"]).default("MEMBER"),
+});
+
+export const updateMemberRoleSchema = z.object({
+  role: z.enum(["ADMIN", "MEMBER", "VIEWER"]),
 });
 
 // ============================================================

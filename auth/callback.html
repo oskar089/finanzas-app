@@ -39,29 +39,21 @@
     </div>
 
     <script>
-      // Extract token from URL query parameter
+      // OAuth outcome arrives via query params only for errors.
+      // On success the server sets HttpOnly auth cookies on the redirect
+      // response itself — nothing sensitive ever touches the URL or storage.
       const params = new URLSearchParams(window.location.search);
-      const token = params.get("token");
       const error = params.get("error");
 
       if (error) {
         // Store error in sessionStorage for the main app to display
         sessionStorage.setItem("oauth_error", decodeURIComponent(error));
         window.location.replace("/");
-      } else if (token) {
-        // Store token in localStorage (same key used by api.js)
-        localStorage.setItem("token", token);
-
-        // Clean URL — remove query params without reloading
+      } else {
+        // Success — cookies are already set; clean URL and enter the app.
         if (window.history.replaceState) {
           window.history.replaceState(null, "", "/auth/callback.html");
         }
-
-        // Redirect to main application
-        window.location.replace("/");
-      } else {
-        // No token — redirect to login page with error
-        sessionStorage.setItem("oauth_error", "oauth_failed");
         window.location.replace("/");
       }
     </script>

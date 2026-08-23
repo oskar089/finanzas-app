@@ -3,6 +3,8 @@ import prisma from "../lib/prisma.js";
 import {
   createBudgetSchema,
   updateBudgetSchema,
+  budgetQuerySchema,
+  budgetCopySchema,
 } from "../validations/schemas.js";
 import { ApiError } from "../middleware/errorHandler.js";
 
@@ -14,12 +16,12 @@ const router = Router();
  */
 router.get("/", async (req, res, next) => {
   try {
-    const { month, year } = req.query;
+    const { month, year } = budgetQuerySchema.parse(req.query);
 
     const where = {
       userId: req.user.id,
-      ...(month && { month: parseInt(month) }),
-      ...(year && { year: parseInt(year) }),
+      ...(month && { month }),
+      ...(year && { year }),
     };
 
     const budgets = await prisma.budget.findMany({
@@ -34,8 +36,8 @@ router.get("/", async (req, res, next) => {
 
     // Determine the date range: if month/year is provided, use that;
     // otherwise use the min/max month across all budgets
-    const targetMonth = month ? parseInt(month, 10) : null;
-    const targetYear = year ? parseInt(year, 10) : null;
+    const targetMonth = month ?? null;
+    const targetYear = year ?? null;
 
     // Single GROUP BY query — common case: all budgets share the same month
     if (targetMonth && targetYear) {
@@ -78,8 +80,8 @@ router.get("/", async (req, res, next) => {
       return;
     }
 
-    // Fallback for mixed-month budgets: group by category + month/year
-    // Build a combined key of category+month+year for lookup
+    // Fallback for mixed-month budgets: each budget must only count the
+    // spending inside ITS OWN month window, never the whole queried range.
     const allCategoryIds = budgets.map((b) => b.category);
     const minYear = Math.min(...budgets.map((b) => b.year));
     const maxYear = Math.max(...budgets.map((b) => b.year));
@@ -90,8 +92,7 @@ router.get("/", async (req, res, next) => {
       ...budgets.filter((b) => b.year === maxYear).map((b) => b.month)
     );
 
-    const spending = await prisma.transaction.groupBy({
-      by: ["category"],
+    const transactions = await prisma.transaction.findMany({
       where: {
         userId: req.user.id,
         type: "EXPENSE",
@@ -101,16 +102,20 @@ router.get("/", async (req, res, next) => {
           lt: new Date(maxYear, maxMonth, 1),
         },
       },
-      _sum: { amount: true },
+      select: { category: true, amount: true, date: true },
     });
 
-    // Build a map from category -> total spent across all queried months
-    const spendingMap = new Map(
-      spending.map((s) => [s.category, Number(s._sum.amount || 0)])
-    );
+    // Bucket spending by category + transaction month so every budget reads
+    // its own period. Key format: "<year>-<month>:<category>"
+    const spendingMap = new Map();
+    for (const t of transactions) {
+      const key = `${t.date.getFullYear()}-${t.date.getMonth() + 1}:${t.category}`;
+      spendingMap.set(key, (spendingMap.get(key) || 0) + Number(t.amount));
+    }
 
     const budgetsWithSpending = budgets.map((budget) => {
-      const spent = spendingMap.get(budget.category) ?? 0;
+      const spent =
+        spendingMap.get(`${budget.year}-${budget.month}:${budget.category}`) ?? 0;
       const budgetAmount = Number(budget.amount);
       const remaining = budgetAmount - spent;
       const percentage = budgetAmount > 0 ? (spent / budgetAmount) * 100 : 0;
@@ -339,11 +344,8 @@ router.delete("/:id", async (req, res, next) => {
  */
 router.post("/copy", async (req, res, next) => {
   try {
-    const { fromMonth, fromYear, toMonth, toYear } = req.body;
-
-    if (!fromMonth || !fromYear || !toMonth || !toYear) {
-      throw new ApiError(400, "Source and target month/year are required");
-    }
+    const { fromMonth, fromYear, toMonth, toYear } =
+      budgetCopySchema.parse(req.body);
 
     // Get source budgets
     const sourceBudgets = await prisma.budget.findMany({

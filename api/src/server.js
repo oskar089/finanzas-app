@@ -94,7 +94,8 @@ app.use(
   })
 );
 
-// Rate limiting
+// Rate limiting (global API limiter; the stricter auth limiter lives in
+// routes/auth.js so it travels with that router)
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
   max: 500, // Limit each IP to 500 requests per windowMs
@@ -103,16 +104,7 @@ const limiter = rateLimit({
   },
 });
 
-const authLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 100, // Stricter limit for auth endpoints
-  handler: (_req, res) => {
-    res.status(429).json({ error: "Too many authentication attempts, please try again later." });
-  },
-});
-
 app.use("/api/", limiter);
-app.use("/api/auth/", authLimiter);
 
 // ============================================================
 // BODY PARSING

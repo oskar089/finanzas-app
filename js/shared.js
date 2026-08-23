@@ -67,11 +67,18 @@ export function showConfirm(mensaje) {
 }
 
 /**
+ * Format a number as currency (es-ES locale) for a specific ISO 4217 code.
+ */
+export function formatCurrencyIn(amount, currency = "EUR") {
+  return new Intl.NumberFormat("es-ES", {
+    style: "currency",
+    currency,
+  }).format(amount);
+}
+
+/**
  * Format a number as EUR currency (es-ES locale).
  */
 export function formatCurrency(amount) {
-  return new Intl.NumberFormat("es-ES", {
-    style: "currency",
-    currency: "EUR",
-  }).format(amount);
+  return formatCurrencyIn(amount);
 }

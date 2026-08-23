@@ -67,8 +67,7 @@ async function register(name, email, password) {
     method: "POST",
     body: JSON.stringify({ name, email, password }),
   });
-  // Token is set as HttpOnly cookie by the server
-  // Bearer token in response body kept for backward compat
+  // Auth is cookie-based: the server sets HttpOnly cookies on this response.
   return data;
 }
 
@@ -77,8 +76,7 @@ async function login(email, password) {
     method: "POST",
     body: JSON.stringify({ email, password }),
   });
-  // Token is set as HttpOnly cookie by the server
-  // Bearer token in response body kept for backward compat
+  // Auth is cookie-based: the server sets HttpOnly cookies on this response.
   return data;
 }
 
@@ -101,7 +99,17 @@ function loginWithApple() {
   window.location.href = "/api/auth/apple";
 }
 
-function logout() {
+async function logout() {
+  try {
+    // Always ask the server to revoke the refresh-token family and clear
+    // cookies (same /auth prefix as login). The endpoint is idempotent, so
+    // calling it without a session is harmless — cookie presence cannot be
+    // checked from JS (HttpOnly), so we never skip the remote call.
+    await apiFetch("/auth/logout", { method: "POST" });
+  } catch {
+    // Never strand the user: end the local session even if the server
+    // call fails (offline, expired token, endpoint unavailable, etc.).
+  }
   clearToken();
   window.location.reload();
 }
@@ -142,7 +150,7 @@ async function deleteAccount(id) {
 // TRANSACTIONS API
 // ============================================================
 
-async function getTransactions(params = {}) {
+async function getTransactions(params = {}, options = {}) {
   const query = new URLSearchParams();
   if (params.page) query.append("page", params.page);
   if (params.limit) query.append("limit", params.limit);
@@ -159,7 +167,8 @@ async function getTransactions(params = {}) {
   if (params.sortOrder) query.append("sortOrder", params.sortOrder);
 
   const qs = query.toString();
-  return apiFetch(`/transactions${qs ? "?" + qs : ""}`);
+  // options (e.g. AbortController signal) flows through to fetch
+  return apiFetch(`/transactions${qs ? "?" + qs : ""}`, options);
 }
 
 async function getTransaction(id) {

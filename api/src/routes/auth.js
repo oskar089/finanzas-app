@@ -1,5 +1,6 @@
 import { Router } from "express";
 import bcrypt from "bcryptjs";
+import rateLimit from "express-rate-limit";
 import prisma from "../lib/prisma.js";
 import {
   authenticate,
@@ -7,6 +8,7 @@ import {
   generateRefreshToken,
   verifyRefresh,
   rotateRefresh,
+  revokeRefreshFamily,
   COOKIE_OPTIONS,
   REFRESH_COOKIE_OPTIONS,
 } from "../middleware/auth.js";
@@ -19,6 +21,19 @@ import { ApiError } from "../middleware/errorHandler.js";
 import passport from "../config/passport.js";
 
 const router = Router();
+
+// Stricter throttle for auth endpoints — they are the highest-value
+// brute-force and token-guessing targets. Applied at the router level so
+// the guarantee travels with the router regardless of how it is mounted.
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 100, // Stricter limit for auth endpoints
+  handler: (_req, res) => {
+    res.status(429).json({ error: "Too many authentication attempts, please try again later." });
+  },
+});
+
+router.use(authLimiter);
 
 /**
  * Default categories seeded on registration matching spec requirements.
@@ -43,10 +58,7 @@ export const DEFAULT_CATEGORIES = [
  */
 router.post("/register", async (req, res, next) => {
   try {
-    // Validate input
     const validatedData = registerSchema.parse(req.body);
-
-    // Hash password
     const hashedPassword = await bcrypt.hash(validatedData.password, 12);
 
     // Create user + seed default categories atomically within $transaction
@@ -81,11 +93,9 @@ router.post("/register", async (req, res, next) => {
       return user;
     });
 
-    // Generate tokens
     const token = generateToken(result.id);
     const { rawToken } = await generateRefreshToken(result.id);
 
-    // Set HttpOnly cookies
     res.cookie("jwt", token, {
       ...COOKIE_OPTIONS,
       maxAge: 15 * 60 * 1000, // 15 minutes
@@ -98,7 +108,6 @@ router.post("/register", async (req, res, next) => {
     res.status(201).json({
       message: "User registered successfully",
       user: result,
-      token, // backward compat — Bearer fallback
     });
   } catch (error) {
     // Handle duplicate email from Prisma unique constraint
@@ -222,7 +231,6 @@ function handleOAuthCallback(provider) {
           const token = generateToken(user.id);
           const { rawToken } = await generateRefreshToken(user.id);
 
-          // Set HttpOnly cookies
           res.cookie("jwt", token, {
             ...COOKIE_OPTIONS,
             maxAge: 15 * 60 * 1000,
@@ -232,10 +240,15 @@ function handleOAuthCallback(provider) {
             maxAge: 7 * 24 * 60 * 60 * 1000,
           });
 
+          // Auth cookies were set above on this same redirect response;
+          // the frontend must rely on them, never on a token in the URL.
           res.redirect(
-            `${process.env.FRONTEND_URL || "http://localhost:5173"}/auth/callback.html?token=${token}`
+            `${process.env.FRONTEND_URL || "http://localhost:5173"}/auth/callback.html`
           );
         } catch (error) {
+          // Log server-side so production OAuth failures are debuggable;
+          // the user-facing redirect stays generic to avoid leaking details.
+          console.error(`[oauth:${provider}] account creation failed:`, error);
           res.redirect(
             `${process.env.FRONTEND_URL || "http://localhost:5173"}/auth/callback.html?error=${encodeURIComponent("account_creation_failed")}`
           );
@@ -319,10 +332,8 @@ router.get(
  */
 router.post("/login", async (req, res, next) => {
   try {
-    // Validate input
     const validatedData = loginSchema.parse(req.body);
 
-    // Find user
     const user = await prisma.user.findUnique({
       where: { email: validatedData.email },
     });
@@ -339,7 +350,6 @@ router.post("/login", async (req, res, next) => {
       );
     }
 
-    // Verify password
     const isPasswordValid = await bcrypt.compare(
       validatedData.password,
       user.password
@@ -349,11 +359,9 @@ router.post("/login", async (req, res, next) => {
       throw new ApiError(401, "Invalid email or password");
     }
 
-    // Generate tokens
     const token = generateToken(user.id);
     const { rawToken } = await generateRefreshToken(user.id);
 
-    // Set HttpOnly cookies
     res.cookie("jwt", token, {
       ...COOKIE_OPTIONS,
       maxAge: 15 * 60 * 1000, // 15 minutes
@@ -371,7 +379,6 @@ router.post("/login", async (req, res, next) => {
         name: user.name,
         defaultCurrency: user.defaultCurrency,
       },
-      token, // backward compat — Bearer fallback
     });
   } catch (error) {
     next(error);
@@ -391,14 +398,12 @@ router.post("/refresh", async (req, res, next) => {
       return res.status(401).json({ error: "No refresh token provided" });
     }
 
-    // Verify the refresh token
     const tokenRecord = await verifyRefresh(rawToken);
 
     if (!tokenRecord) {
       return res.status(401).json({ error: "Invalid or expired refresh token" });
     }
 
-    // Rotate the token
     const result = await rotateRefresh(tokenRecord, rawToken);
 
     if (result.theftDetected) {
@@ -410,10 +415,8 @@ router.post("/refresh", async (req, res, next) => {
       });
     }
 
-    // Issue new JWT
     const newToken = generateToken(tokenRecord.userId);
 
-    // Set new cookies
     res.cookie("jwt", newToken, {
       ...COOKIE_OPTIONS,
       maxAge: 15 * 60 * 1000,
@@ -425,8 +428,30 @@ router.post("/refresh", async (req, res, next) => {
 
     res.json({
       message: "Token refreshed successfully",
-      token: newToken, // backward compat
     });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * POST /api/auth/logout
+ * Revoke the caller's refresh-token family and clear auth cookies.
+ * Idempotent: a missing or invalid refresh token still clears the cookies
+ * and returns 204. Auth context is intentionally NOT required so that
+ * clients with an expired access JWT can still log out.
+ */
+router.post("/logout", async (req, res, next) => {
+  try {
+    const rawToken = req.cookies?.refresh;
+    if (rawToken) {
+      // Best-effort revocation; failures to match are not errors here.
+      await revokeRefreshFamily(rawToken);
+    }
+
+    res.clearCookie("jwt", COOKIE_OPTIONS);
+    res.clearCookie("refresh", REFRESH_COOKIE_OPTIONS);
+    res.status(204).end();
   } catch (error) {
     next(error);
   }
@@ -480,18 +505,27 @@ router.put("/profile", authenticate, async (req, res, next) => {
       updateData.password = await bcrypt.hash(updateData.password, 12);
     }
 
-    const user = await prisma.user.update({
-      where: { id: req.user.id },
-      data: updateData,
-      select: {
-        id: true,
-        email: true,
-        name: true,
-        avatarUrl: true,
-        defaultCurrency: true,
-        updatedAt: true,
-      },
-    });
+    let user;
+    try {
+      user = await prisma.user.update({
+        where: { id: req.user.id },
+        data: updateData,
+        select: {
+          id: true,
+          email: true,
+          name: true,
+          avatarUrl: true,
+          defaultCurrency: true,
+          updatedAt: true,
+        },
+      });
+    } catch (error) {
+      // Handle duplicate email from Prisma unique constraint
+      if (error.code === "P2002" && error.meta?.target?.includes("email")) {
+        return res.status(409).json({ error: "Email already in use" });
+      }
+      throw error;
+    }
 
     res.json({
       message: "Profile updated successfully",

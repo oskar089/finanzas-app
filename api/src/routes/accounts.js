@@ -163,7 +163,7 @@ router.get("/:id/balance", async (req, res, next) => {
       throw new ApiError(404, "Account not found");
     }
 
-    // Get transactions grouped by date for balance history
+    // Get transactions ordered by date for balance history
     const transactions = await prisma.transaction.findMany({
       where: { accountId: req.params.id },
       orderBy: { date: "asc" },
@@ -174,16 +174,25 @@ router.get("/:id/balance", async (req, res, next) => {
       },
     });
 
-    // Calculate balance history
-    let runningBalance = Number(account.balance);
+    // Signed effect of a transaction on its account balance.
+    // Matches getBalanceEffect() in transactions.js: INCOME adds;
+    // EXPENSE and TRANSFER subtract (a transfer moves money OUT
+    // of the account its row is attached to).
+    const signedEffect = (t) =>
+      t.type === "INCOME" ? Number(t.amount) : -Number(t.amount);
+
+    // Rebuild history forward: derive the starting balance by removing every
+    // transaction's effect from the current balance, then replay in order.
+    const startingBalance =
+      Number(account.balance) -
+      transactions.reduce((sum, t) => sum + signedEffect(t), 0);
+
+    let runningBalance = startingBalance;
     const balanceHistory = [];
 
-    // Process transactions in reverse to get historical balances
-    for (let i = transactions.length - 1; i >= 0; i--) {
-      const t = transactions[i];
-      const delta = t.type === "INCOME" ? -Number(t.amount) : Number(t.amount);
-      runningBalance -= delta;
-      balanceHistory.unshift({
+    for (const t of transactions) {
+      runningBalance += signedEffect(t);
+      balanceHistory.push({
         date: t.date,
         balance: runningBalance,
       });

@@ -207,7 +207,8 @@ describe("rotateRefresh", () => {
 
     // Latest in family is the same record
     prisma.refreshToken.findFirst.mockResolvedValue(tokenRecord);
-    prisma.refreshToken.delete.mockResolvedValue(tokenRecord);
+    // Atomic consumption claim wins (count === 1)
+    prisma.refreshToken.deleteMany.mockResolvedValue({ count: 1 });
     prisma.refreshToken.create.mockResolvedValue({
       id: "rt-new",
       userId: "user-1",
@@ -221,17 +222,19 @@ describe("rotateRefresh", () => {
     expect(result.theftDetected).toBe(false);
     expect(result).toHaveProperty("rawToken");
     expect(result).toHaveProperty("familyId");
-    expect(prisma.refreshToken.delete).toHaveBeenCalledWith({
-      where: { id: "rt-old" },
+    // Consumption must be an atomic guarded claim on id + stored hash
+    expect(prisma.refreshToken.deleteMany).toHaveBeenCalledWith({
+      where: { id: "rt-old", token: "hashed-old" },
     });
     expect(prisma.refreshToken.create).toHaveBeenCalledOnce();
   });
 
-  it("detects token reuse (theft) and invalidates all tokens", async () => {
+  it("detects token reuse (theft) and invalidates the whole family", async () => {
     const oldRecord = {
       id: "rt-old",
       userId: "user-1",
       familyId: "family-1",
+      token: "hashed-old",
     };
 
     // Simulate that the latest token in family is different (already rotated)
@@ -245,36 +248,31 @@ describe("rotateRefresh", () => {
 
     expect(result.theftDetected).toBe(true);
     expect(prisma.refreshToken.deleteMany).toHaveBeenCalledWith({
-      where: { userId: "user-1" },
+      where: { familyId: "family-1" },
     });
   });
-});
 
-// ============================================================
-// Task 1.13: Duplicate email tests
-// ============================================================
+  it("treats lost atomic claim (count === 0) as reuse and revokes the family", async () => {
+    // Simulates two concurrent requests presenting the same refresh token:
+    // this request passed verifyRefresh but another one consumed the record first.
+    const tokenRecord = {
+      id: "rt-old",
+      userId: "user-1",
+      familyId: "family-1",
+      token: "hashed-old",
+    };
 
-describe("register — duplicate email handling", () => {
-  it("rejects duplicate email with 409 via Prisma P2002 error", async () => {
-    // Simulate the P2002 error that Prisma throws on unique constraint violation
-    const p2002Error = new Error("Unique constraint failed");
-    p2002Error.code = "P2002";
-    p2002Error.meta = { target: ["email"] };
-    p2002Error.name = "PrismaClientKnownRequestError";
+    prisma.refreshToken.findFirst.mockResolvedValue(tokenRecord);
+    prisma.refreshToken.deleteMany.mockResolvedValue({ count: 0 });
 
-    // Verify the error shape matches what the route handles
-    expect(p2002Error.code).toBe("P2002");
-    expect(p2002Error.meta.target).toContain("email");
-  });
+    const result = await rotateRefresh(tokenRecord, "raw-old-token");
 
-  it("ensures registration uses $transaction for atomicity", () => {
-    // The route handler wraps user.create + category.createMany in
-    // prisma.$transaction() ensuring atomicity. The check for duplicate
-    // email is handled by the Prisma unique constraint (P2002) inside
-    // the transaction, avoiding the race condition of check-then-act.
-    // This is verified by the route implementation in routes/auth.js
-    // which catches P2002 and returns 409.
-    expect(true).toBe(true);
+    expect(result.theftDetected).toBe(true);
+    // No new pair may be issued for a lost claim
+    expect(prisma.refreshToken.create).not.toHaveBeenCalled();
+    expect(prisma.refreshToken.deleteMany).toHaveBeenCalledWith({
+      where: { familyId: "family-1" },
+    });
   });
 });
 

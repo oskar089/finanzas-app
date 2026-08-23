@@ -18,12 +18,13 @@ const bulkCreateSchema = z.object({
 
 /**
  * Calculate the balance effect of a transaction on its account.
- * INCOME → adds to balance; EXPENSE → subtracts; TRANSFER → no net effect
- * (dual-entry support requires a toAccountId field for proper transfer handling).
+ * INCOME → adds to balance; EXPENSE and TRANSFER → subtract.
+ * Transfers are stored as a single source-leg row: money leaves the
+ * account the row is attached to. Recording a destination leg would
+ * require a toAccountId column, which the schema does not have yet.
  */
 function getBalanceEffect(type, amount) {
   if (type === "INCOME") return Number(amount);
-  if (type === "TRANSFER") return 0;
   return -Number(amount);
 }
 

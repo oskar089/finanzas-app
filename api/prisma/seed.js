@@ -3,13 +3,14 @@ import bcrypt from "bcryptjs";
 
 const prisma = new PrismaClient();
 
-async function main() {
-  console.log("🌱 Seeding database...");
+// Every helper below is find-or-create keyed on a stable attribute so the
+// seed can re-run (CI, onboarding refreshes) without duplicating demo data
+// or dying on unique constraints.
 
-  // Create demo user
+async function ensureUser() {
   const hashedPassword = await bcrypt.hash("Password123", 12);
 
-  const user = await prisma.user.upsert({
+  return prisma.user.upsert({
     where: { email: "demo@financeapp.com" },
     update: {},
     create: {
@@ -19,43 +20,90 @@ async function main() {
       defaultCurrency: "USD",
     },
   });
+}
 
-  console.log("✅ Created demo user:", user.email);
+// Account has no natural unique constraint; userId+name is stable enough
+// for demo data and keeps re-runs from stacking duplicate accounts.
+async function ensureAccount(userId, name, data) {
+  const existing = await prisma.account.findFirst({
+    where: { userId, name },
+  });
+  if (existing) return existing;
+  return prisma.account.create({ data: { userId, name, ...data } });
+}
 
-  // Create demo accounts
-  const checkingAccount = await prisma.account.create({
-    data: {
-      userId: user.id,
-      name: "Main Checking",
-      type: "CHECKING",
-      balance: 2500.0,
-      currency: "USD",
+async function ensureTransaction(data) {
+  const existing = await prisma.transaction.findFirst({
+    where: {
+      accountId: data.accountId,
+      description: data.description,
+      date: data.date,
     },
   });
+  if (existing) return existing;
+  return prisma.transaction.create({ data });
+}
 
-  const savingsAccount = await prisma.account.create({
+async function ensureBudget(userId, data) {
+  return prisma.budget.upsert({
+    where: {
+      userId_category_month_year: {
+        userId,
+        category: data.category,
+        month: data.month,
+        year: data.year,
+      },
+    },
+    update: {},
+    create: { ...data, userId },
+  });
+}
+
+async function ensureFamilyGroup(userId, name) {
+  const existing = await prisma.familyGroup.findFirst({
+    where: { adminId: userId, name },
+  });
+  if (existing) return existing;
+  return prisma.familyGroup.create({
     data: {
-      userId: user.id,
-      name: "Savings Account",
-      type: "SAVINGS",
-      balance: 10000.0,
-      currency: "USD",
+      name,
+      adminId: userId,
+      members: {
+        create: {
+          userId,
+          role: "ADMIN",
+        },
+      },
     },
   });
+}
 
-  const creditCard = await prisma.account.create({
-    data: {
-      userId: user.id,
-      name: "Credit Card",
-      type: "CREDIT_CARD",
-      balance: -450.0,
-      currency: "USD",
-    },
+async function main() {
+  console.log("🌱 Seeding database...");
+
+  const user = await ensureUser();
+  console.log("✅ Demo user ready:", user.email);
+
+  const checkingAccount = await ensureAccount(user.id, "Main Checking", {
+    type: "CHECKING",
+    balance: 2500.0,
+    currency: "USD",
   });
 
-  console.log("✅ Created demo accounts");
+  const savingsAccount = await ensureAccount(user.id, "Savings Account", {
+    type: "SAVINGS",
+    balance: 10000.0,
+    currency: "USD",
+  });
 
-  // Create demo transactions
+  const creditCard = await ensureAccount(user.id, "Credit Card", {
+    type: "CREDIT_CARD",
+    balance: -450.0,
+    currency: "USD",
+  });
+
+  console.log("✅ Demo accounts ready");
+
   const now = new Date();
   const currentMonth = now.getMonth();
   const currentYear = now.getFullYear();
@@ -136,43 +184,37 @@ async function main() {
   ];
 
   for (const t of transactions) {
-    await prisma.transaction.create({ data: t });
+    await ensureTransaction(t);
   }
 
-  console.log("✅ Created demo transactions");
+  console.log("✅ Demo transactions ready");
 
-  // Create demo budgets
   const budgets = [
     {
-      userId: user.id,
       category: "housing",
       amount: 900.0,
       month: currentMonth + 1,
       year: currentYear,
     },
     {
-      userId: user.id,
       category: "alimentacion",
       amount: 500.0,
       month: currentMonth + 1,
       year: currentYear,
     },
     {
-      userId: user.id,
       category: "transporte",
       amount: 150.0,
       month: currentMonth + 1,
       year: currentYear,
     },
     {
-      userId: user.id,
       category: "utilities",
       amount: 200.0,
       month: currentMonth + 1,
       year: currentYear,
     },
     {
-      userId: user.id,
       category: "entretenimiento",
       amount: 100.0,
       month: currentMonth + 1,
@@ -181,26 +223,14 @@ async function main() {
   ];
 
   for (const b of budgets) {
-    await prisma.budget.create({ data: b });
+    await ensureBudget(user.id, b);
   }
 
-  console.log("✅ Created demo budgets");
+  console.log("✅ Demo budgets ready");
 
-  // Create demo family group
-  const family = await prisma.familyGroup.create({
-    data: {
-      name: "Smith Family",
-      adminId: user.id,
-      members: {
-        create: {
-          userId: user.id,
-          role: "ADMIN",
-        },
-      },
-    },
-  });
+  const family = await ensureFamilyGroup(user.id, "Smith Family");
 
-  console.log("✅ Created demo family group:", family.name);
+  console.log("✅ Demo family group ready:", family.name);
 
   console.log("\n🎉 Seed completed!");
   console.log("\n📋 Demo credentials:");

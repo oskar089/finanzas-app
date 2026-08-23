@@ -160,6 +160,14 @@ router.post("/:id/invite", async (req, res, next) => {
     });
 
     if (!userToInvite) {
+      // ACCEPTED enumeration risk, documented deliberately: membership is
+      // immediate here (no pending-invitation model), so answering
+      // generically would silently drop invites for unregistered emails.
+      // The oracle also stays open either way — an admin can observe the
+      // member list to see whether the invite landed — so masking this 404
+      // buys no real privacy at real UX cost. Proper fix requires an
+      // invitations table with deferred acceptance; only then can this
+      // response be made status-agnostic.
       throw new ApiError(404, "User not found with this email");
     }
 

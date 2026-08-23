@@ -1429,6 +1429,10 @@ body.dark-mode .page-item.disabled .page-link {
   background: linear-gradient(135deg, #f7b733, #fc4a1a);
 }
 
+.app-toast-error {
+  background: linear-gradient(135deg, #d32f2f, #b71c1c);
+}
+
 /* ============================================================
    CONFIRM OVERLAY
    ============================================================ */

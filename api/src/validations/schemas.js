@@ -76,36 +76,89 @@ export const updateAccountSchema = z.object({
 
 // ============================================================
 // TRANSACTION SCHEMAS
+//
+// Canonical category shape: `category` is a denormalized NAME STRING that
+// matches Transaction.category / Budget.category in the database. There is
+// no categoryId column — the client resolves Category.id to its name before
+// submit. Do not reintroduce categoryId fields here: routes pass validated
+// data straight to Prisma, so an unknown field becomes a 400 on every write.
 // ============================================================
 
-export const createTransactionSchema = z.object({
-  accountId: z.string().uuid("Invalid account ID"),
-  amount: z.number().positive("Amount must be positive"),
-  type: z.enum(["INCOME", "EXPENSE", "TRANSFER"]),
-  category: z.string().min(1, "Category is required"),
-  categoryId: z.string().uuid("Invalid category ID").optional().nullable(),
-  description: z.string().min(1, "Description is required"),
-  notes: z.string().optional(),
-  date: z.string().datetime("Invalid date format").or(z.string().date()),
-});
+export const createTransactionSchema = z
+  .object({
+    accountId: z.string().uuid("Invalid account ID"),
+    toAccountId: z
+      .string()
+      .uuid("Invalid destination account ID")
+      .optional()
+      .nullable(),
+    amount: z.number().positive("Amount must be positive"),
+    type: z.enum(["INCOME", "EXPENSE", "TRANSFER"]),
+    category: z.string().min(1, "Category is required"),
+    description: z.string().min(1, "Description is required"),
+    notes: z.string().optional(),
+    date: z.string().datetime("Invalid date format").or(z.string().date()),
+  })
+  .superRefine((data, ctx) => {
+    if (data.type === "TRANSFER") {
+      if (!data.toAccountId) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["toAccountId"],
+          message: "toAccountId is required for TRANSFER",
+        });
+      } else if (data.toAccountId === data.accountId) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["toAccountId"],
+          message: "toAccountId must differ from accountId",
+        });
+      }
+    } else if (data.toAccountId) {
+      // Only transfers carry a destination leg; a non-null one elsewhere is
+      // a client contract violation, not data we can silently drop.
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["toAccountId"],
+        message: "toAccountId is only allowed for TRANSFER transactions",
+      });
+    }
+  });
 
-export const updateTransactionSchema = z.object({
-  accountId: z.string().uuid().optional(),
-  amount: z.number().positive().optional(),
-  type: z.enum(["INCOME", "EXPENSE", "TRANSFER"]).optional(),
-  category: z.string().min(1).optional(),
-  categoryId: z.string().uuid().optional().nullable(),
-  description: z.string().min(1).optional(),
-  notes: z.string().optional(),
-  date: z.string().datetime().or(z.string().date()).or(z.date()).optional(),
-});
+export const updateTransactionSchema = z
+  .object({
+    accountId: z.string().uuid().optional(),
+    toAccountId: z.string().uuid().optional().nullable(),
+    amount: z.number().positive().optional(),
+    type: z.enum(["INCOME", "EXPENSE", "TRANSFER"]).optional(),
+    category: z.string().min(1).optional(),
+    description: z.string().min(1).optional(),
+    notes: z.string().optional(),
+    date: z.string().datetime().or(z.string().date()).or(z.date()).optional(),
+  })
+  .superRefine((data, ctx) => {
+    // Partial updates: only statically checkable rules here. Rules that need
+    // the stored row as context (effective type/destination) are enforced in
+    // the PUT handler.
+    if (
+      data.type === "TRANSFER" &&
+      data.toAccountId != null &&
+      data.accountId != null &&
+      data.toAccountId === data.accountId
+    ) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["toAccountId"],
+        message: "toAccountId must differ from accountId",
+      });
+    }
+  });
 
 export const transactionQuerySchema = z.object({
   page: z.coerce.number().int().positive().default(1),
   limit: z.coerce.number().int().positive().max(100).default(20),
   type: z.enum(["INCOME", "EXPENSE", "TRANSFER"]).optional(),
   category: z.string().optional(),
-  categoryId: z.string().uuid().optional(),
   accountId: z.string().uuid().optional(),
   startDate: z.string().datetime().optional(),
   endDate: z.string().datetime().optional(),
@@ -124,7 +177,6 @@ export const transactionQuerySchema = z.object({
 
 export const createBudgetSchema = z.object({
   category: z.string().min(1, "Category is required"),
-  categoryId: z.string().uuid().optional().nullable(),
   amount: z.number().positive("Amount must be positive"),
   month: z.number().int().min(1).max(12),
   year: z.number().int().min(2020).max(2030),
@@ -132,7 +184,6 @@ export const createBudgetSchema = z.object({
 
 export const updateBudgetSchema = z.object({
   category: z.string().min(1).optional(),
-  categoryId: z.string().uuid().optional().nullable(),
   amount: z.number().positive().optional(),
   month: z.number().int().min(1).max(12).optional(),
   year: z.number().int().min(2020).max(2030).optional(),

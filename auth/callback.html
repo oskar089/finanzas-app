@@ -47,7 +47,8 @@
 
       if (error) {
         // Store error in sessionStorage for the main app to display
-        sessionStorage.setItem("oauth_error", decodeURIComponent(error));
+        // params.get() already URL-decodes; decoding again throws URIError.
+        sessionStorage.setItem("oauth_error", error);
         window.location.replace("/");
       } else {
         // Success — cookies are already set; clean URL and enter the app.

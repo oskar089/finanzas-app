@@ -117,7 +117,7 @@ async function loadCuentas() {
     accountSelect.innerHTML =
       '<option value="">Todas las cuentas</option>' +
       cuentas
-        .map((c) => `<option value="${c.id}">${escapeHTML(c.name)}</option>`)
+        .map((c) => `<option value="${escapeHTML(c.id)}">${escapeHTML(c.name)}</option>`)
         .join("");
     accountSelect.value = selectedAccountId || "";
     renderAccountList();
@@ -551,6 +551,10 @@ form.addEventListener("submit", async (e) => {
     accountId: selectedAccountId || cuentas[0]?.id,
   };
 
+  // cancelarEdicion() resets editandoId before the toast below evaluates,
+  // so the editing state must be captured up front
+  const wasEditing = Boolean(editandoId);
+
   try {
     if (editandoId) {
       await updateTransaction(editandoId, transactionData);
@@ -562,7 +566,7 @@ form.addEventListener("submit", async (e) => {
     currentPage = 1;
     await loadMovimientos();
     showToast(
-      editandoId ? "Movimiento actualizado ✓" : "Movimiento agregado ✓",
+      wasEditing ? "Movimiento actualizado ✓" : "Movimiento agregado ✓",
       "success",
     );
   } catch (err) {
@@ -646,8 +650,10 @@ accountsTableBody.addEventListener("click", async (e) => {
     const cuenta = cuentas.find((c) => c.id === id);
     if (!cuenta) return;
 
+    // Backend rejects with 409 when the account still has transactions,
+    // so the dialog warns instead of promising a cascade delete
     const confirmado = await showConfirm(
-      `¿Eliminar cuenta "${cuenta.name}"? Se eliminarán todos sus movimientos asociados.`,
+      `¿Eliminar la cuenta "${cuenta.name}"? Las cuentas con movimientos asociados no pueden eliminarse.`,
     );
     if (!confirmado) return;
 

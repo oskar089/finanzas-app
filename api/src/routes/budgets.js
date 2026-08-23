@@ -347,50 +347,57 @@ router.post("/copy", async (req, res, next) => {
     const { fromMonth, fromYear, toMonth, toYear } =
       budgetCopySchema.parse(req.body);
 
-    // Get source budgets
-    const sourceBudgets = await prisma.budget.findMany({
-      where: {
-        userId: req.user.id,
-        month: fromMonth,
-        year: fromYear,
-      },
-    });
+    // Both reads in one round trip inside $transaction: the copy decision
+    // needs source AND target state together.
+    const [sourceBudgets, existingTargets] = await prisma.$transaction([
+      prisma.budget.findMany({
+        where: {
+          userId: req.user.id,
+          month: fromMonth,
+          year: fromYear,
+        },
+      }),
+      prisma.budget.findMany({
+        where: {
+          userId: req.user.id,
+          month: toMonth,
+          year: toYear,
+        },
+        select: { category: true },
+      }),
+    ]);
 
     if (sourceBudgets.length === 0) {
       throw new ApiError(404, "No budgets found for source month");
     }
 
-    // Create new budgets (skip duplicates)
-    const created = [];
-    for (const source of sourceBudgets) {
-      const existing = await prisma.budget.findUnique({
-        where: {
-          userId_category_month_year: {
-            userId: req.user.id,
-            category: source.category,
-            month: toMonth,
-            year: toYear,
-          },
-        },
-      });
+    // Pre-filter duplicates so createMany stays a single INSERT.
+    const existingCategories = new Set(existingTargets.map((b) => b.category));
+    const toCreate = sourceBudgets
+      .filter((source) => !existingCategories.has(source.category))
+      .map((source) => ({
+        userId: req.user.id,
+        category: source.category,
+        amount: source.amount,
+        month: toMonth,
+        year: toYear,
+      }));
 
-      if (!existing) {
-        const newBudget = await prisma.budget.create({
-          data: {
-            userId: req.user.id,
-            category: source.category,
-            amount: source.amount,
-            month: toMonth,
-            year: toYear,
-          },
-        });
-        created.push(newBudget);
-      }
-    }
+    // skipDuplicates guards the read→write race: a concurrent copy could
+    // insert between our check and this statement. Budget has a
+    // @@unique([userId, category, month, year]) constraint, which
+    // skipDuplicates requires to work.
+    const result =
+      toCreate.length > 0
+        ? await prisma.budget.createMany({
+            data: toCreate,
+            skipDuplicates: true,
+          })
+        : { count: 0 };
 
     res.json({
-      message: `${created.length} budgets copied successfully`,
-      count: created.length,
+      message: `${result.count} budgets copied successfully`,
+      count: result.count,
     });
   } catch (error) {
     next(error);

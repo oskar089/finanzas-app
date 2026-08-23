@@ -119,8 +119,8 @@ async function loadBudgets() {
     budgetsContainer.innerHTML =
       '<p class="text-muted mb-0">Cargando presupuestos...</p>';
 
-    const month = parseInt(budgetMonth.value);
-    const year = parseInt(budgetYear.value);
+    const month = parseInt(budgetMonth.value, 10);
+    const year = parseInt(budgetYear.value, 10);
 
     const data = await getBudgets({ month, year });
     budgets = data.budgets || [];
@@ -220,8 +220,8 @@ budgetForm.addEventListener("submit", async (e) => {
     return;
   }
 
-  const month = parseInt(budgetMonth.value);
-  const year = parseInt(budgetYear.value);
+  const month = parseInt(budgetMonth.value, 10);
+  const year = parseInt(budgetYear.value, 10);
 
   try {
     if (editingBudgetId) {
@@ -287,8 +287,8 @@ budgetsContainer.addEventListener("click", async (e) => {
 // ============================================================
 
 btnCopyBudgets.addEventListener("click", async () => {
-  const fromMonth = parseInt(budgetMonth.value);
-  const fromYear = parseInt(budgetYear.value);
+  const fromMonth = parseInt(budgetMonth.value, 10);
+  const fromYear = parseInt(budgetYear.value, 10);
 
   let toMonth = fromMonth + 1;
   let toYear = fromYear;

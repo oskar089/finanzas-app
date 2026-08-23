@@ -16,7 +16,7 @@
     <!-- ============================================================ -->
     <!-- AUTH SCREEN -->
     <!-- ============================================================ -->
-    <div id="authScreen" class="auth-screen">
+    <main id="authScreen" class="auth-screen">
       <div class="auth-card">
         <!-- Left Panel - Illustration -->
         <div class="auth-left">
@@ -45,6 +45,7 @@
             <!-- Form -->
             <form id="authForm">
               <div class="input-group">
+                <label class="visually-hidden" for="authEmail">Correo electrónico</label>
                 <i class="bi bi-envelope-fill input-icon"></i>
                 <input
                   type="email"
@@ -55,6 +56,7 @@
               </div>
 
               <div class="input-group">
+                <label class="visually-hidden" for="authPassword">Contraseña</label>
                 <i class="bi bi-lock-fill input-icon"></i>
                 <input
                   type="password"
@@ -73,6 +75,7 @@
 
               <!-- Name field (hidden by default) -->
               <div id="nameField" class="input-group d-none">
+                <label class="visually-hidden" for="authName">Nombre</label>
                 <i class="bi bi-person-fill input-icon"></i>
                 <input
                   type="text"
@@ -119,7 +122,7 @@
           </div>
         </div>
       </div>
-    </div>
+    </main>
 
     <!-- ============================================================ -->
     <!-- MAIN APP -->
@@ -163,6 +166,7 @@
                 <div class="card-header">Cuenta</div>
                 <div class="card-body">
                   <div class="d-flex gap-2 align-items-center">
+                    <label class="visually-hidden" for="accountSelect">Cuenta</label>
                     <select id="accountSelect" class="form-select">
                       <option value="">Cargando cuentas...</option>
                     </select>
@@ -400,8 +404,8 @@
                       <div class="col-md-2">
                         <label class="form-label" for="tipo">Tipo</label>
                         <select id="tipo" class="form-select" required>
-                          <option value="gasto"><i class="bi bi-cash-stack"></i> Gasto</option>
-                          <option value="ingreso"><i class="bi bi-wallet2"></i> Ingreso</option>
+                          <option value="gasto">Gasto</option>
+                          <option value="ingreso">Ingreso</option>
                         </select>
                       </div>
                       <div class="col-md-2">
@@ -459,7 +463,7 @@
                       </div>
                     </div>
                   </form>
-                  <input type="file" id="fileInput" accept=".csv" hidden />
+                  <input type="file" id="fileInput" accept=".csv" hidden aria-label="Importar archivo CSV" />
                 </div>
               </div>
             </div>
@@ -666,9 +670,6 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
     <script type="module" src="js/auth.js"></script>
     <script type="module" src="js/app.js"></script>
-    <!-- [DEPRECATED] app.js legacy — reemplazado por js/app.js (ES modules).
-         Se mantiene el archivo pero sin cargarlo para evitar conflictos de DOM.
-         app.js original contiene ABM local con localStorage. -->
     <script>
       function togglePassword() {
         const input = document.getElementById('authPassword');

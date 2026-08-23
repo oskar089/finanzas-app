@@ -99,8 +99,12 @@ describe("DELETE /api/accounts/:id — atomic $transaction", () => {
     };
     await txCb(tx);
 
+    // Both transfer legs block deletion: source rows (accountId) and
+    // destination legs (toAccountId) reference this account.
     expect(tx.transaction.count).toHaveBeenCalledWith({
-      where: { accountId: "account-1" },
+      where: {
+        OR: [{ accountId: "account-1" }, { toAccountId: "account-1" }],
+      },
     });
     expect(tx.account.update).toHaveBeenCalledWith({
       where: { id: "account-1" },

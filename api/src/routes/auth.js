@@ -110,7 +110,10 @@ router.post("/register", async (req, res, next) => {
       user: result,
     });
   } catch (error) {
-    // Handle duplicate email from Prisma unique constraint
+    // Handle duplicate email from Prisma unique constraint.
+    // ACCEPTED enumeration risk: signup must tell a real person their email
+    // is taken or onboarding breaks, and the authLimiter above caps probing.
+    // Standard trade-off for consumer registration flows.
     if (error.code === "P2002" && error.meta?.target?.includes("email")) {
       return res.status(409).json({ error: "Email already in use" });
     }
@@ -131,6 +134,10 @@ router.post("/register", async (req, res, next) => {
  * 3. If found by email → link: set provider ID on existing user
  * 4. If not found → create user with password=null, seed default categories
  * 5. Return user
+ *
+ * Email linking is NOT an enumeration surface: it only runs after the
+ * provider authenticated the caller, and the matched email comes from the
+ * provider's verified profile — a third party cannot probe arbitrary emails.
  */
 async function findOrCreateOAuthUser({ provider, providerId, email, name }) {
   const providerField = provider === "google" ? "googleId" : "appleId";

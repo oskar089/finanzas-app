@@ -156,7 +156,6 @@ async function getTransactions(params = {}, options = {}) {
   if (params.limit) query.append("limit", params.limit);
   if (params.type) query.append("type", params.type);
   if (params.category) query.append("category", params.category);
-  if (params.categoryId) query.append("categoryId", params.categoryId);
   if (params.accountId) query.append("accountId", params.accountId);
   if (params.startDate) query.append("startDate", params.startDate);
   if (params.endDate) query.append("endDate", params.endDate);
@@ -359,8 +358,6 @@ export {
   loginWithGoogle,
   loginWithApple,
   isLoggedIn,
-  getToken,
-  clearToken,
   // Accounts
   getAccounts,
   getAccount,

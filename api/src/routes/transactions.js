@@ -17,11 +17,13 @@ const bulkCreateSchema = z.object({
 });
 
 /**
- * Calculate the balance effect of a transaction on its account.
+ * Calculate the balance effect of a transaction on its SOURCE account
+ * (the account the row is attached to via accountId).
  * INCOME → adds to balance; EXPENSE and TRANSFER → subtract.
- * Transfers are stored as a single source-leg row: money leaves the
- * account the row is attached to. Recording a destination leg would
- * require a toAccountId column, which the schema does not have yet.
+ *
+ * A TRANSFER row also carries toAccountId: its destination credit
+ * (+amount) is applied by the route handlers as a second leg on the same
+ * $transaction, so both sides of the move stay atomic.
  */
 function getBalanceEffect(type, amount) {
   if (type === "INCOME") return Number(amount);
@@ -144,15 +146,19 @@ router.post("/", async (req, res, next) => {
       throw new ApiError(404, "Account not found");
     }
 
-    // Create transaction and update account balance
-    const [transaction] = await prisma.$transaction([
-      prisma.transaction.create({
-        data: {
-          ...validatedData,
-          userId: req.user.id,
-          date: new Date(validatedData.date),
-        },
-      }),
+    // IDOR protection on the transfer destination: money must only land in
+    // an account owned by the requesting user. Mirrors the source check
+    // (404, no existence disclosure).
+    if (validatedData.type === "TRANSFER") {
+      const destination = await prisma.account.findFirst({
+        where: { id: validatedData.toAccountId, userId: req.user.id },
+      });
+      if (!destination) {
+        throw new ApiError(404, "Account not found");
+      }
+    }
+
+    const balanceOperations = [
       prisma.account.update({
         where: { id: validatedData.accountId },
         data: {
@@ -161,6 +167,31 @@ router.post("/", async (req, res, next) => {
           },
         },
       }),
+    ];
+
+    if (validatedData.type === "TRANSFER") {
+      balanceOperations.push(
+        prisma.account.update({
+          where: { id: validatedData.toAccountId },
+          data: {
+            balance: {
+              increment: Number(validatedData.amount),
+            },
+          },
+        }),
+      );
+    }
+
+    // Create transaction and update both balance legs atomically
+    const [transaction] = await prisma.$transaction([
+      prisma.transaction.create({
+        data: {
+          ...validatedData,
+          userId: req.user.id,
+          date: new Date(validatedData.date),
+        },
+      }),
+      ...balanceOperations,
     ]);
 
     res.status(201).json({
@@ -203,20 +234,36 @@ router.put("/:id", async (req, res, next) => {
         : Number(existingTransaction.amount);
     const newEffect = getBalanceEffect(newType, newAmount);
 
-    const accountChanged =
-      validatedData.accountId &&
-      validatedData.accountId !== existingTransaction.accountId;
+    // Effective source account (provided value wins over the stored one)
+    const newAccountId = validatedData.accountId || existingTransaction.accountId;
 
-    // Build update data, converting date if provided
-    const updateData = { ...validatedData };
-    if (updateData.date) {
-      updateData.date = new Date(updateData.date);
+    const wasTransfer = existingTransaction.type === "TRANSFER";
+    const willBeTransfer = newType === "TRANSFER";
+
+    // Effective destination: a TRANSFER result keeps its stored leg unless
+    // the request provides a replacement; null means "no change" on partial
+    // updates, never "remove the leg" (removal requires changing the type).
+    const newToAccountId = willBeTransfer
+      ? (validatedData.toAccountId != null
+          ? validatedData.toAccountId
+          : existingTransaction.toAccountId)
+      : null;
+
+    if (willBeTransfer && !newToAccountId) {
+      throw new ApiError(400, "toAccountId is required for TRANSFER");
     }
 
-    // IDOR protection: if the destination account changed, verify it exists and
-    // belongs to the requesting user before any balance is moved into it.
-    // Mirrors POST and bulk (404, no existence disclosure).
-    if (accountChanged) {
+    if (newToAccountId && newToAccountId === newAccountId) {
+      throw new ApiError(400, "toAccountId must differ from accountId");
+    }
+
+    // IDOR protection: any leg that CHANGED must be verified against the
+    // requesting user before balances are moved into it. Mirrors POST and
+    // bulk (404, no existence disclosure).
+    if (
+      validatedData.accountId &&
+      validatedData.accountId !== existingTransaction.accountId
+    ) {
       const targetAccount = await prisma.account.findFirst({
         where: { id: validatedData.accountId, userId: req.user.id },
       });
@@ -224,27 +271,72 @@ router.put("/:id", async (req, res, next) => {
         throw new ApiError(404, "Account not found");
       }
     }
+    if (
+      willBeTransfer &&
+      newToAccountId !== existingTransaction.toAccountId
+    ) {
+      const targetDestination = await prisma.account.findFirst({
+        where: { id: newToAccountId, userId: req.user.id },
+      });
+      if (!targetDestination) {
+        throw new ApiError(404, "Account not found");
+      }
+    }
 
-    // Interactive $transaction handles account changes atomically:
-    // if accountId changed → restore old account + adjust new account
-    // if same account → apply net delta
+    // Build update data, converting date if provided
+    const updateData = { ...validatedData };
+    if (updateData.date) {
+      updateData.date = new Date(updateData.date);
+    }
+    // The destination column is derived here, not echoed from the payload:
+    // non-transfers must persist NULL so a type change away from TRANSFER
+    // actually clears the leg.
+    updateData.toAccountId = newToAccountId;
+
+    // Interactive $transaction keeps every balance leg atomic:
+    // - source side restores/adjusts per getBalanceEffect deltas
+    // - destination side reverses the old credit then applies the new one;
+    //   unconditional reverse-and-reapply is deliberate — it is correct for
+    //   every combination (same account, changed account, changed amount,
+    //   transfer added or removed) and easier to prove than conditional math.
     const [transaction] = await prisma.$transaction(async (tx) => {
-      if (accountChanged) {
-        // Restore old account by reversing the original effect
+      if (
+        validatedData.accountId &&
+        validatedData.accountId !== existingTransaction.accountId
+      ) {
+        // Restore old source by reversing the original effect
         await tx.account.update({
           where: { id: existingTransaction.accountId },
           data: { balance: { increment: -oldEffect } },
         });
-        // Apply the new effect on the destination account
+        // Apply the new effect on the new source account
         await tx.account.update({
           where: { id: validatedData.accountId },
           data: { balance: { increment: newEffect } },
         });
       } else {
-        // Same account — just apply the net delta
+        // Same source — just apply the net delta
         await tx.account.update({
           where: { id: existingTransaction.accountId },
           data: { balance: { increment: newEffect - oldEffect } },
+        });
+      }
+
+      // Destination legs
+      if (wasTransfer) {
+        await tx.account.update({
+          where: { id: existingTransaction.toAccountId },
+          data: {
+            balance: { decrement: Number(existingTransaction.amount) },
+          },
+        });
+      }
+      if (willBeTransfer) {
+        await tx.account.update({
+          where: { id: newToAccountId },
+          data: {
+            balance: { increment: newAmount },
+          },
         });
       }
 
@@ -284,11 +376,7 @@ router.delete("/:id", async (req, res, next) => {
       existingTransaction.amount,
     );
 
-    // Delete transaction and reverse balance
-    await prisma.$transaction([
-      prisma.transaction.delete({
-        where: { id: req.params.id },
-      }),
+    const reversalOperations = [
       prisma.account.update({
         where: { id: existingTransaction.accountId },
         data: {
@@ -297,6 +385,29 @@ router.delete("/:id", async (req, res, next) => {
           },
         },
       }),
+    ];
+
+    // Deleting a TRANSFER must also claw back its destination credit,
+    // otherwise the destination keeps money whose source row is gone.
+    if (existingTransaction.type === "TRANSFER") {
+      reversalOperations.push(
+        prisma.account.update({
+          where: { id: existingTransaction.toAccountId },
+          data: {
+            balance: {
+              decrement: Number(existingTransaction.amount),
+            },
+          },
+        }),
+      );
+    }
+
+    // Delete transaction and reverse both balance legs
+    await prisma.$transaction([
+      prisma.transaction.delete({
+        where: { id: req.params.id },
+      }),
+      ...reversalOperations,
     ]);
 
     res.json({ message: "Transaction deleted successfully" });
@@ -313,10 +424,15 @@ router.post("/bulk", async (req, res, next) => {
   try {
     const { transactions: validatedTransactions } = bulkCreateSchema.parse(req.body);
 
-    // IDOR protection: batch-verify that every referenced account belongs to
-    // the requesting user before creating transactions or updating balances.
-    // Mirrors the single-create POST handler (404, no existence disclosure).
-    const accountIds = [...new Set(validatedTransactions.map((t) => t.accountId))];
+    // IDOR protection: batch-verify that every referenced account (source and
+    // transfer destination) belongs to the requesting user before creating
+    // transactions or updating balances. Mirrors the single-create POST
+    // handler (404, no existence disclosure).
+    const sourceIds = validatedTransactions.map((t) => t.accountId);
+    const transferTargetIds = validatedTransactions
+      .filter((t) => t.type === "TRANSFER")
+      .map((t) => t.toAccountId);
+    const accountIds = [...new Set([...sourceIds, ...transferTargetIds])];
     const ownedAccounts = await prisma.account.findMany({
       where: { id: { in: accountIds }, userId: req.user.id },
       select: { id: true },
@@ -346,6 +462,17 @@ router.post("/bulk", async (req, res, next) => {
             },
           },
         });
+
+        if (t.type === "TRANSFER") {
+          await tx.account.update({
+            where: { id: t.toAccountId },
+            data: {
+              balance: {
+                increment: Number(t.amount),
+              },
+            },
+          });
+        }
 
         created.push(transaction);
       }

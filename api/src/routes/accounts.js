@@ -126,8 +126,13 @@ router.delete("/:id", async (req, res, next) => {
     }
 
     await prisma.$transaction(async (tx) => {
+      // A transfer references TWO accounts: the source row (accountId) and
+      // its destination leg (toAccountId). Either reference blocks deletion,
+      // otherwise removing a destination would silently orphan the credit.
       const txCount = await tx.transaction.count({
-        where: { accountId: req.params.id },
+        where: {
+          OR: [{ accountId: req.params.id }, { toAccountId: req.params.id }],
+        },
       });
 
       if (txCount > 0) {
@@ -163,23 +168,35 @@ router.get("/:id/balance", async (req, res, next) => {
       throw new ApiError(404, "Account not found");
     }
 
-    // Get transactions ordered by date for balance history
+    // Get transactions ordered by date for balance history. A transfer
+    // touches this account through either leg, so incoming legs (rows whose
+    // toAccountId points here) must join the replay or the derived starting
+    // balance would drift from the real stored balance.
     const transactions = await prisma.transaction.findMany({
-      where: { accountId: req.params.id },
+      where: {
+        OR: [{ accountId: req.params.id }, { toAccountId: req.params.id }],
+      },
       orderBy: { date: "asc" },
       select: {
+        accountId: true,
+        toAccountId: true,
         amount: true,
         type: true,
         date: true,
       },
     });
 
-    // Signed effect of a transaction on its account balance.
-    // Matches getBalanceEffect() in transactions.js: INCOME adds;
-    // EXPENSE and TRANSFER subtract (a transfer moves money OUT
-    // of the account its row is attached to).
-    const signedEffect = (t) =>
-      t.type === "INCOME" ? Number(t.amount) : -Number(t.amount);
+    // Signed effect of a transaction on THIS account's balance.
+    // Outgoing legs match getBalanceEffect() in transactions.js: INCOME adds;
+    // EXPENSE and TRANSFER subtract (a transfer moves money OUT of the
+    // account its row is attached to). Incoming transfer legs live on rows
+    // attached to the source and credit this account by +amount.
+    const signedEffect = (t) => {
+      if (t.toAccountId === req.params.id && t.accountId !== req.params.id) {
+        return Number(t.amount);
+      }
+      return t.type === "INCOME" ? Number(t.amount) : -Number(t.amount);
+    };
 
     // Rebuild history forward: derive the starting balance by removing every
     // transaction's effect from the current balance, then replay in order.

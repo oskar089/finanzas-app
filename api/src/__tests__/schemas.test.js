@@ -73,6 +73,99 @@ describe("createTransactionSchema", () => {
   });
 });
 
+// ============================================================
+// TRANSFER destination leg contract
+// ============================================================
+
+describe("createTransactionSchema — toAccountId rules", () => {
+  const incomeBase = {
+    accountId: VALID_UUID,
+    amount: 100,
+    type: "INCOME",
+    category: "sueldo",
+    description: "Monthly salary",
+    date: VALID_DATE,
+  };
+
+  const transferBase = {
+    accountId: VALID_UUID,
+    amount: 100,
+    type: "TRANSFER",
+    category: "transferencia",
+    description: "Move money",
+    date: VALID_DATE,
+  };
+
+  it("requires toAccountId for TRANSFER", () => {
+    expect(() => createTransactionSchema.parse(transferBase)).toThrow();
+  });
+
+  it("accepts a TRANSFER with a distinct destination", () => {
+    const result = createTransactionSchema.parse({
+      ...transferBase,
+      toAccountId: "123e4567-e89b-12d3-a456-426614174001",
+    });
+    expect(result.toAccountId).toBe(
+      "123e4567-e89b-12d3-a456-426614174001",
+    );
+  });
+
+  it("rejects a TRANSFER whose destination equals its source", () => {
+    expect(() =>
+      createTransactionSchema.parse({
+        ...transferBase,
+        toAccountId: VALID_UUID,
+      }),
+    ).toThrow();
+  });
+
+  it("forbids a non-null toAccountId on INCOME/EXPENSE", () => {
+    expect(() =>
+      createTransactionSchema.parse({
+        ...incomeBase,
+        toAccountId: "123e4567-e89b-12d3-a456-426614174001",
+      }),
+    ).toThrow();
+    expect(() =>
+      createTransactionSchema.parse({
+        ...incomeBase,
+        type: "EXPENSE",
+        toAccountId: "123e4567-e89b-12d3-a456-426614174001",
+      }),
+    ).toThrow();
+  });
+
+  it("accepts an explicit null toAccountId on non-transfer types", () => {
+    const result = createTransactionSchema.parse({
+      ...incomeBase,
+      toAccountId: null,
+    });
+    expect(result.toAccountId).toBeNull();
+  });
+});
+
+// ============================================================
+// Canonical category shape — category is a NAME STRING; there is no
+// categoryId column anywhere in the data model, so schemas must not
+// advertise one (clients following the old shape got Prisma 400s).
+// ============================================================
+
+describe("createTransactionSchema — canonical category shape", () => {
+  it("strips a legacy categoryId field instead of forwarding it to Prisma", () => {
+    const result = createTransactionSchema.parse({
+      accountId: VALID_UUID,
+      amount: 100,
+      type: "INCOME",
+      category: "sueldo",
+      categoryId: VALID_UUID,
+      description: "Monthly salary",
+      date: VALID_DATE,
+    });
+    expect(result.category).toBe("sueldo");
+    expect("categoryId" in result).toBe(false);
+  });
+});
+
 describe("updateTransactionSchema", () => {
   const validUpdate = {
     amount: 200,

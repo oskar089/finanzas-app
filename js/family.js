@@ -79,12 +79,12 @@ function renderGroupCard(g) {
           <!-- Invite Form -->
           <form class="invite-form row g-3 mb-3" data-family-id="${escapeHTML(g.id)}">
             <div class="col-md-4">
-              <label class="form-label">Email del usuario</label>
-              <input type="email" class="form-control form-control-sm invite-email" placeholder="email@ejemplo.com" required />
+              <label class="form-label" for="invite-email-${escapeHTML(g.id)}">Email del usuario</label>
+              <input type="email" id="invite-email-${escapeHTML(g.id)}" class="form-control form-control-sm invite-email" placeholder="email@ejemplo.com" required />
             </div>
             <div class="col-md-3">
-              <label class="form-label">Rol</label>
-              <select class="form-select form-select-sm invite-role">
+              <label class="form-label" for="invite-role-${escapeHTML(g.id)}">Rol</label>
+              <select id="invite-role-${escapeHTML(g.id)}" class="form-select form-select-sm invite-role">
                 <option value="MEMBER">Miembro</option>
                 <option value="VIEWER">Espectador</option>
                 <option value="ADMIN">Admin</option>

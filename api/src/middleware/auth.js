@@ -70,6 +70,13 @@ export const generateToken = (userId) => {
 };
 
 /**
+ * Length of the raw-token prefix stored as tokenHint. 8 hex chars (32 bits)
+ * narrow candidates to ~1 row without weakening bcrypt: an attacker who
+ * reads the DB still cannot invert a hint into a usable token.
+ */
+export const REFRESH_HINT_LENGTH = 8;
+
+/**
  * Generate a refresh token, store hashed version in DB.
  * Returns the raw token string to set as cookie.
  */
@@ -84,6 +91,9 @@ export const generateRefreshToken = async (userId) => {
     data: {
       userId,
       token: hashedToken,
+      // Prefix of the raw token, NOT derivable from the hash — it exists so
+      // verifyRefresh can find this row by index instead of scanning all rows.
+      tokenHint: rawToken.slice(0, REFRESH_HINT_LENGTH),
       familyId,
       expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days
     },
@@ -97,9 +107,11 @@ export const generateRefreshToken = async (userId) => {
  * On success, returns the matched DB record for rotation.
  */
 export const verifyRefresh = async (rawToken) => {
-  // Find all non-expired tokens for potential matching
-  const tokens = await prisma.refreshToken.findMany({
+  // Index-narrowed lookup: only rows sharing the presented token's prefix can
+  // possibly match, so bcrypt compares ~1 hash instead of every live token.
+  const candidates = await prisma.refreshToken.findMany({
     where: {
+      tokenHint: rawToken.slice(0, REFRESH_HINT_LENGTH),
       expiresAt: { gt: new Date() },
     },
     select: {
@@ -110,8 +122,7 @@ export const verifyRefresh = async (rawToken) => {
     },
   });
 
-  // Find matching token by bcrypt comparison
-  for (const stored of tokens) {
+  for (const stored of candidates) {
     const isValid = await bcrypt.compare(rawToken, stored.token);
     if (isValid) {
       return stored;
@@ -169,6 +180,7 @@ export const rotateRefresh = async (oldTokenRecord, rawOldToken) => {
     data: {
       userId,
       token: hashedToken,
+      tokenHint: rawToken.slice(0, REFRESH_HINT_LENGTH),
       familyId,
       expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days
     },

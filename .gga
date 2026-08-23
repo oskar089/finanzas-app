@@ -10,3 +10,6 @@ MODE=staged
 
 # Cache: true (default) to skip unchanged files
 CACHE=true
+
+# Max seconds to wait for the AI provider review response
+TIMEOUT=900
